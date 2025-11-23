@@ -462,8 +462,24 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 }
             } catch (rangeError) {
                 console.error("Error extracting page range:", rangeError);
-                // Fallback to body text
-                pageText = doc.body?.textContent?.trim() || "";
+
+                // Multi-level fallback strategy
+                try {
+                    // Try body.textContent first
+                    if (doc.body && doc.body.textContent) {
+                        pageText = doc.body.textContent.trim();
+                        console.log("DEBUG: Fallback 1 - Used body.textContent");
+                    } else {
+                        // Try extractTextFromChapter helper
+                        const extraction = extractTextFromChapter(doc);
+                        pageText = extraction.text;
+                        console.log("DEBUG: Fallback 2 - Used extractTextFromChapter helper");
+                    }
+                } catch (fallbackError) {
+                    console.error("Error in fallback text extraction:", fallbackError);
+                    // Last resort: empty text which will trigger the empty page handler
+                    pageText = "";
+                }
             }
 
             // 3. Check if we have images in the visible content
@@ -531,9 +547,26 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
         } catch (error) {
             console.error("Error extracting/translating:", error);
+
+            // Provide more specific error messages based on the error type
+            let errorMessage = "Please try navigating to the next chapter.";
+            let originalMessage = "Error loading content.";
+
+            if (error instanceof Error) {
+                console.error("Error details:", error.message, error.stack);
+
+                if (error.message.includes("Rendition not available")) {
+                    errorMessage = "Reader not initialized. Please try again in a moment.";
+                } else if (error.message.includes("No current location")) {
+                    errorMessage = "Unable to determine current page location. Try navigating to another page.";
+                } else if (error.message.includes("No contents available") || error.message.includes("No document found")) {
+                    errorMessage = "This page's content could not be accessed. Try navigating to the next page.";
+                }
+            }
+
             setTranslatedSegments([{
-                original: "Error loading content.",
-                translated: "Please try navigating to the next chapter."
+                original: originalMessage,
+                translated: errorMessage
             }]);
         } finally {
             setIsTranslating(false);
