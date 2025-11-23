@@ -281,4 +281,42 @@ export const getTranslation = async (original: string): Promise<string | null> =
     });
 };
 
+// User Preferences Storage
+export interface UserPreferences {
+    fontSize?: number;
+}
+
+export const saveUserPreferences = async (preferences: Partial<UserPreferences>): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(SETTINGS_STORE, 'readwrite');
+        const store = transaction.objectStore(SETTINGS_STORE);
+
+        // Get existing preferences first
+        const getRequest = store.get('userPreferences');
+
+        getRequest.onerror = () => reject(getRequest.error);
+        getRequest.onsuccess = () => {
+            const existing = getRequest.result || {};
+            const updated = { ...existing, ...preferences };
+            const putRequest = store.put(updated, 'userPreferences');
+
+            putRequest.onerror = () => reject(putRequest.error);
+            putRequest.onsuccess = () => resolve();
+        };
+    });
+};
+
+export const getUserPreferences = async (): Promise<UserPreferences> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(SETTINGS_STORE, 'readonly');
+        const store = transaction.objectStore(SETTINGS_STORE);
+        const request = store.get('userPreferences');
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || {});
+    });
+};
+
 

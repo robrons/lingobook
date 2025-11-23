@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, Type, Columns, ArrowRight, ArrowLeft, List, Book, Image as ImageIcon, Languages, X, FileText } from 'lucide-react';
-import { ReadingMode, Theme, TranslationSegment, BookMetadata, TocItem } from '../types';
+import { ReadingMode, TranslationSegment, BookMetadata, TocItem } from '../types';
 import { translateTextSegments, translate, summarize, AVAILABLE_MODELS, getCurrentModelId, setCurrentModelId, clearModelCache } from '../services/llmService';
-import { updateBookProgress } from '../services/db';
+import { updateBookProgress, saveUserPreferences, getUserPreferences } from '../services/db';
 import { LoadingSpinner } from './LoadingSpinner';
 
 interface ReaderProps {
@@ -226,8 +226,8 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
     // View State
     const [mode, setMode] = useState<ReadingMode>(ReadingMode.ORIGINAL);
-    const [theme, setTheme] = useState<Theme>(Theme.LIGHT);
     const [fontSize, setFontSize] = useState(100); // Percentage
+    const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
     const [showControls, setShowControls] = useState(true);
     const [showToc, setShowToc] = useState(false);
@@ -260,9 +260,23 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     const renditionRef = useRef<any>(null); // ePub.Rendition
     const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const anchorTextRef = useRef<string | null>(null); // Store text to scroll to
+    const capturedPageTextRef = useRef<string | null>(null); // Store captured page text for translation
 
     // Scroll State
     const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
+
+    // --- Load User Preferences ---
+    useEffect(() => {
+        getUserPreferences().then(prefs => {
+            if (prefs.fontSize) {
+                setFontSize(prefs.fontSize);
+            }
+            setPreferencesLoaded(true);
+        }).catch(err => {
+            console.error('Failed to load user preferences:', err);
+            setPreferencesLoaded(true);
+        });
+    }, []);
 
     // --- Initialization ---
     useEffect(() => {
@@ -319,6 +333,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
         displayPromise.then(() => {
             setIsReady(true);
+            // Apply sepia (calm) theme
             applyTheme(rendition);
         });
 
@@ -407,87 +422,99 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
         setScrollToIndex(null); // Reset scroll target
 
         try {
-            // 1. Get current page location range
-            if (!renditionRef.current) {
-                throw new Error("Rendition not available");
+            // 1. Check if we have pre-captured page text from mode switch (PAGE-SCOPED TRANSLATION)
+            if (capturedPageTextRef.current) {
+                console.log("DEBUG: Using pre-captured page text for translation (page-scoped)");
+                const pageText = capturedPageTextRef.current;
+
+                // Clear after use so subsequent navigations load fresh
+                capturedPageTextRef.current = null;
+
+                console.log("DEBUG: Captured text length:", pageText.length);
+                console.log("DEBUG: Preview:", pageText.substring(0, 200));
+
+                setPageType('text');
+                setRawText(pageText);
+
+                // Translate the captured page text
+                await translateTextSegments(
+                    pageText,
+                    "English",
+                    (status) => {
+                        setStatusMessage(status);
+                    },
+                    (segment) => {
+                        setTranslatedSegments(prev => {
+                            const newSegments = [...prev, segment];
+
+                            // Check if we need to scroll to a specific segment
+                            if (anchorTextRef.current && prev.length < newSegments.length) {
+                                const newSegmentIndex = newSegments.length - 1;
+                                const newSegment = newSegments[newSegmentIndex];
+
+                                if (newSegment.original.includes(anchorTextRef.current) ||
+                                    anchorTextRef.current.includes(newSegment.original)) {
+                                    console.log(`DEBUG: Found matching segment at index ${newSegmentIndex}`);
+                                    setScrollToIndex(newSegmentIndex);
+                                    anchorTextRef.current = null;
+                                }
+                            }
+                            return newSegments;
+                        });
+                    }
+                );
+
+                setIsTranslating(false);
+                return; // Exit early - page-scoped translation complete
             }
 
-            const loc = renditionRef.current.currentLocation();
-            if (!loc || !loc.start || !loc.end) {
+            // 2. No captured text - load from spine (CHAPTER-SCOPED TRANSLATION for navigation)
+            console.log("DEBUG: No captured text, loading from spine (chapter-scoped)");
+
+            // Get current chapter/spine item from the tracked location
+            // Use the currentLocation state which is reliably updated by the 'relocated' event
+            let locationCfi = currentLocation;
+
+            // Fallback: try to get from rendition if state is empty
+            if (!locationCfi && renditionRef.current) {
+                const loc = renditionRef.current.currentLocation();
+                if (loc && loc.start) {
+                    locationCfi = loc.start.cfi;
+                }
+            }
+
+            if (!locationCfi) {
                 throw new Error("No current location found");
             }
 
-            console.log("DEBUG: fetchAndTranslateCurrentChapter - PAGE SCOPE");
-            console.log("DEBUG: Page start CFI:", loc.start.cfi);
-            console.log("DEBUG: Page end CFI:", loc.end.cfi);
+            console.log("DEBUG: fetchAndTranslateCurrentChapter - Using location CFI:", locationCfi);
 
-            // 2. Extract text from the current page range using the rendition
-            // Get the range object for the current page
-            const contents = renditionRef.current.getContents();
-            if (!contents || contents.length === 0) {
-                throw new Error("No contents available");
+            // 2. Get the spine item for this location
+            const spineItem = bookRef.current.spine.get(locationCfi);
+            if (!spineItem) {
+                throw new Error("No spine item found for current location");
             }
 
-            // Get the first content (usually there's only one in paginated mode)
-            const content = contents[0];
+            console.log("DEBUG: Loading chapter from spine item");
 
-            // Get the document from the current iframe
-            const doc = content.document;
+            // 3. Load the document for this spine item
+            const doc = await spineItem.load(bookRef.current.load.bind(bookRef.current));
             if (!doc) {
-                throw new Error("No document found in content");
+                throw new Error("No document found in spine item");
             }
 
-            console.log("DEBUG: Document available, attempting to extract visible text");
+            console.log("DEBUG: Document loaded, attempting to extract text");
 
-            // Get text from the visible viewport by getting the range between start and end CFI
-            let pageText = "";
-            try {
-                // Try to get the range for the visible page
-                const startRange = renditionRef.current.getRange(loc.start.cfi);
-                const endRange = renditionRef.current.getRange(loc.end.cfi);
+            // 4. Extract text and check for images
+            const extraction = extractTextFromChapter(doc);
+            const pageText = extraction.text;
+            const hasImages = extraction.hasImages;
 
-                if (startRange && endRange) {
-                    // Create a range that spans from start to end of the page
-                    const pageRange = doc.createRange();
-                    pageRange.setStart(startRange.startContainer, startRange.startOffset);
-                    pageRange.setEnd(endRange.endContainer, endRange.endOffset);
-
-                    pageText = pageRange.toString().trim();
-                    console.log("DEBUG: Extracted page text length:", pageText.length);
-                    console.log("DEBUG: Page text preview:", pageText.substring(0, 200));
-                } else {
-                    console.warn("Could not get ranges, falling back to visible body extraction");
-                    // Fallback: just get text from body (this might include more than the page)
-                    pageText = doc.body?.textContent?.trim() || "";
-                }
-            } catch (rangeError) {
-                console.error("Error extracting page range:", rangeError);
-
-                // Multi-level fallback strategy
-                try {
-                    // Try body.textContent first
-                    if (doc.body && doc.body.textContent) {
-                        pageText = doc.body.textContent.trim();
-                        console.log("DEBUG: Fallback 1 - Used body.textContent");
-                    } else {
-                        // Try extractTextFromChapter helper
-                        const extraction = extractTextFromChapter(doc);
-                        pageText = extraction.text;
-                        console.log("DEBUG: Fallback 2 - Used extractTextFromChapter helper");
-                    }
-                } catch (fallbackError) {
-                    console.error("Error in fallback text extraction:", fallbackError);
-                    // Last resort: empty text which will trigger the empty page handler
-                    pageText = "";
-                }
+            console.log("DEBUG: Extracted text length:", pageText.length);
+            if (pageText.length > 0) {
+                console.log("DEBUG: Text preview:", pageText.substring(0, 200));
             }
 
-            // 3. Check if we have images in the visible content
-            const images = doc.getElementsByTagName('img');
-            const svgs = doc.getElementsByTagName('svg');
-            const hasImages = images.length > 0 || svgs.length > 0;
-
-            // 4. Check if we have text
             if (!pageText || pageText.trim().length === 0) {
                 setRawText("");
                 if (hasImages) {
@@ -559,6 +586,8 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                     errorMessage = "Reader not initialized. Please try again in a moment.";
                 } else if (error.message.includes("No current location")) {
                     errorMessage = "Unable to determine current page location. Try navigating to another page.";
+                } else if (error.message.includes("No spine item found")) {
+                    errorMessage = "Could not find the current chapter. Try navigating to the next chapter.";
                 } else if (error.message.includes("No contents available") || error.message.includes("No document found")) {
                     errorMessage = "This page's content could not be accessed. Try navigating to the next page.";
                 }
@@ -575,19 +604,54 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
     // --- Mode Switching Handlers ---
     const handleModeChange = (newMode: ReadingMode) => {
-        // If switching FROM original mode, capture the current visible text
+        // Capture visible page text when switching FROM original mode TO translation mode
         if (mode === ReadingMode.ORIGINAL && newMode !== ReadingMode.ORIGINAL && renditionRef.current) {
+            try {
+                const contents = renditionRef.current.getContents();
+                if (contents && contents.length > 0) {
+                    const content = contents[0];
+                    const doc = content.document;
+
+                    // Get the visible viewport text using CFI ranges
+                    const loc = renditionRef.current.currentLocation();
+                    if (loc && loc.start && loc.end) {
+                        try {
+                            const startRange = renditionRef.current.getRange(loc.start.cfi);
+                            const endRange = renditionRef.current.getRange(loc.end.cfi);
+
+                            if (startRange && endRange) {
+                                const pageRange = doc.createRange();
+                                pageRange.setStart(startRange.startContainer, startRange.startOffset);
+                                pageRange.setEnd(endRange.endContainer, endRange.endOffset);
+
+                                capturedPageTextRef.current = pageRange.toString().trim();
+                                console.log("DEBUG: Captured visible page text, length:", capturedPageTextRef.current.length);
+                                console.log("DEBUG: Preview:", capturedPageTextRef.current.substring(0, 100));
+                            }
+                        } catch (err) {
+                            console.warn("Could not capture page range, trying body text:", err);
+                            // Fallback: use body text (may include more than visible page)
+                            capturedPageTextRef.current = doc.body?.textContent?.trim() || null;
+                        }
+                    }
+                } else {
+                    console.warn("No contents available for text capture");
+                }
+            } catch (e) {
+                console.error("Error capturing page text:", e);
+                capturedPageTextRef.current = null;
+            }
+
+            // Also capture anchor text for scrolling to matching segment
             try {
                 const loc = renditionRef.current.currentLocation();
                 if (loc && loc.start && loc.start.cfi) {
-                    // Get the text at the current CFI
                     const range = renditionRef.current.getRange(loc.start.cfi);
                     if (range) {
                         const text = range.toString().trim();
                         if (text.length > 0) {
-                            // Take a longer fingerprint to ensure uniqueness for scoping
                             anchorTextRef.current = text.substring(0, 200);
-                            console.log("DEBUG: Captured anchor text:", anchorTextRef.current);
+                            console.log("DEBUG: Captured anchor text for scrolling");
                         }
                     }
                 }
@@ -595,6 +659,8 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 console.error("Error capturing anchor text:", e);
             }
         } else {
+            // Clear captured text when not switching to translation mode
+            capturedPageTextRef.current = null;
             anchorTextRef.current = null;
         }
 
@@ -619,27 +685,51 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     }, [scrollToIndex, translatedSegments]);
 
     // --- Theming Helpers ---
+    // Apply the sepia (calm) theme and font size to a rendition
     const applyTheme = (rendition: any) => {
-        if (!rendition) return;
+        if (!rendition) {
+            console.warn('applyTheme called but rendition is null');
+            return;
+        }
+
+        console.log(`Applying sepia theme, fontSize: ${fontSize}%`);
+
+        // Set font size
         rendition.themes.fontSize(`${fontSize}%`);
 
-        if (theme === Theme.DARK) {
-            rendition.themes.register('dark', { body: { color: '#d6d3d1', background: '#1c1917' } });
-            rendition.themes.select('dark');
-        } else if (theme === Theme.SEPIA) {
-            rendition.themes.register('sepia', { body: { color: '#57534e', background: '#f5f5f4' } });
-            rendition.themes.select('sepia');
-        } else {
-            rendition.themes.register('light', { body: { color: '#1c1917', background: '#fafaf9' } });
-            rendition.themes.select('light');
-        }
+        // Register and apply sepia theme
+        rendition.themes.register('sepia', {
+            body: {
+                color: '#57534e !important',
+                background: '#f5f5f4 !important'
+            }
+        });
+
+        rendition.themes.select('sepia');
+
+        console.log('Sepia theme applied to rendition');
     };
 
+    // Apply theme when fontSize changes
     useEffect(() => {
         if (renditionRef.current) {
+            console.log('Font size changed, applying to rendition');
             applyTheme(renditionRef.current);
+        } else {
+            console.warn('Font size changed but renditionRef.current is null');
         }
-    }, [theme, fontSize]);
+    }, [fontSize]);
+
+
+
+    // --- Save Font Size Preference ---
+    useEffect(() => {
+        if (preferencesLoaded) {
+            saveUserPreferences({ fontSize }).catch(err => {
+                console.error('Failed to save font size preference:', err);
+            });
+        }
+    }, [fontSize, preferencesLoaded]);
 
     // --- Navigation ---
     const navigate = (direction: 'next' | 'prev') => {
@@ -833,9 +923,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
         const containerClass = `
         h-full w-full overflow-y-auto p-6 md:p-12 max-w-5xl mx-auto no-scrollbar
-        ${theme === Theme.DARK ? 'bg-stone-900 text-stone-300' : ''}
-        ${theme === Theme.SEPIA ? 'bg-[#f8f4e9] text-stone-800' : ''}
-        ${theme === Theme.LIGHT ? 'bg-white text-stone-900' : ''}
+        bg-[#f8f4e9] text-stone-800
       `;
 
         const textStyle = { fontSize: `${fontSize / 100}rem`, lineHeight: '1.6' };
@@ -843,7 +931,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
         if (mode === ReadingMode.SPLIT) {
             return (
                 <div className={`${containerClass} flex flex-col md:flex-row gap-8 pb-32`}>
-                    <div className={`flex-1 border-b md:border-b-0 md:border-r pb-8 md:pb-0 md:pr-8 ${theme === Theme.DARK ? 'border-stone-700' : theme === Theme.SEPIA ? 'border-stone-300' : 'border-stone-200'}`}>
+                    <div className={`flex-1 border-b md:border-b-0 md:border-r pb-8 md:pb-0 md:pr-8 border-stone-300`}>
                         <h3 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-6 select-none">Original</h3>
                         <div className="space-y-4">
                             {translatedSegments.map((seg, i) => (
@@ -893,21 +981,9 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     };
 
 
-    // --- Styles for Theme ---
-    const getThemeBg = () => {
-        switch (theme) {
-            case Theme.DARK: return 'bg-[#1c1917]';
-            case Theme.SEPIA: return 'bg-[#f8f4e9]';
-            default: return 'bg-[#fafaf9]';
-        }
-    };
-    const getThemeText = () => {
-        switch (theme) {
-            case Theme.DARK: return 'text-stone-300';
-            case Theme.SEPIA: return 'text-stone-800';
-            default: return 'text-stone-900';
-        }
-    };
+    // --- Styles for Sepia Theme ---
+    const getThemeBg = () => 'bg-[#f8f4e9]';
+    const getThemeText = () => 'text-stone-800';
 
     return (
         <div className={`relative w-full h-full flex flex-col overflow-hidden transition-colors duration-300 ${getThemeBg()} ${getThemeText()}`}>
@@ -918,7 +994,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
             absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 
             transition-transform duration-300 ease-in-out border-b backdrop-blur-md
             ${showControls ? 'translate-y-0' : '-translate-y-full'}
-            ${theme === Theme.DARK ? 'bg-stone-900/80 border-stone-800' : 'bg-white/80 border-stone-200'}
+            bg-[#f8f4e9]/80 border-stone-300
         `}
             >
                 <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-200/20 transition-colors">
@@ -981,7 +1057,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                     <div className="absolute inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                         <div className={`
                             w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col
-                            ${theme === Theme.DARK ? 'bg-stone-900 text-stone-300' : 'bg-white text-stone-900'}
+                            bg-[#f8f4e9] text-stone-800
                         `}>
                             <div className="flex items-center justify-between p-4 border-b border-stone-200/10">
                                 <h3 className="font-serif-apple font-semibold text-lg flex items-center gap-2">
@@ -1021,7 +1097,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                             <div
                                 className={`
                                 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden
-                                ${theme === Theme.DARK ? 'bg-stone-900 border border-stone-800' : 'bg-white border border-stone-200'}
+                                bg-[#f8f4e9] border border-stone-300
                             `}
                             >
                                 {/* Header */}
@@ -1084,7 +1160,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
             absolute bottom-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between
             transition-transform duration-300 ease-in-out backdrop-blur-md border-t
             ${showControls ? 'translate-y-0' : 'translate-y-full'}
-            ${theme === Theme.DARK ? 'bg-stone-900/80 border-stone-800' : 'bg-white/80 border-stone-200'}
+            bg-[#f8f4e9]/80 border-stone-300
         `}
             >
                 <button onClick={() => navigate('prev')} className="p-2 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100">
@@ -1107,7 +1183,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 showAppearance && (
                     <div className={`
             absolute top-16 right-4 w-72 rounded-xl shadow-2xl z-[60] p-4 transform transition-all
-            ${theme === Theme.DARK ? 'bg-stone-800 border border-stone-700' : 'bg-white/95 backdrop-blur-xl border border-stone-200'}
+            bg-[#f8f4e9]/95 backdrop-blur-xl border border-stone-300
           `}>
                         {/* Modes */}
                         <div className="flex bg-stone-200/50 p-1 rounded-lg mb-4">
@@ -1131,21 +1207,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                             </button>
                         </div>
 
-                        {/* Themes */}
-                        <div className="flex justify-between gap-2 mb-4">
-                            <button
-                                onClick={() => setTheme(Theme.LIGHT)}
-                                className={`w-full h-10 rounded-full border-2 bg-white ${theme === Theme.LIGHT ? 'border-orange-500' : 'border-stone-200'}`}
-                            />
-                            <button
-                                onClick={() => setTheme(Theme.SEPIA)}
-                                className={`w-full h-10 rounded-full border-2 bg-[#f8f4e9] ${theme === Theme.SEPIA ? 'border-orange-500' : 'border-stone-300'}`}
-                            />
-                            <button
-                                onClick={() => setTheme(Theme.DARK)}
-                                className={`w-full h-10 rounded-full border-2 bg-[#1c1917] ${theme === Theme.DARK ? 'border-orange-500' : 'border-stone-200'}`}
-                            />
-                        </div>
+
 
                         {/* Font Size */}
                         <div className="flex items-center gap-3 px-2">
@@ -1184,7 +1246,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                                     setSelectedModel(newModel);
                                     setCurrentModelId(newModel);
                                 }}
-                                className={`w-full p-2 text-xs rounded-md border mb-2 outline-none focus:ring-2 focus:ring-orange-500/50 ${theme === Theme.DARK ? 'bg-stone-700 border-stone-600 text-stone-200' : 'bg-stone-50 border-stone-200 text-stone-800'}`}
+                                className={`w-full p-2 text-xs rounded-md border mb-2 outline-none focus:ring-2 focus:ring-orange-500/50 bg-stone-50 border-stone-200 text-stone-800`}
                             >
                                 {AVAILABLE_MODELS.map(m => (
                                     <option key={m.id} value={m.id}>
@@ -1240,7 +1302,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 showToc && (
                     <div className={`
             absolute top-0 bottom-0 left-0 w-80 z-[60] shadow-2xl overflow-y-auto transition-transform
-            ${theme === Theme.DARK ? 'bg-stone-900 border-r border-stone-800' : 'bg-white/95 backdrop-blur-xl border-r border-stone-200'}
+            bg-[#f8f4e9]/95 backdrop-blur-xl border-r border-stone-300
           `}>
                         <div className="p-4 border-b border-stone-200/10 flex items-center justify-between sticky top-0 bg-inherit backdrop-blur-xl">
                             <span className="font-semibold text-sm">Contents</span>
