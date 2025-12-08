@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, Type, Columns, ArrowRight, ArrowLeft, List, Book, Image as ImageIcon, Languages, X, FileText } from 'lucide-react';
-import { ReadingMode, TranslationSegment, BookMetadata, TocItem } from '../types';
+import { TranslationSegment, BookMetadata, TocItem } from '../types';
 import { translateTextSegments, translate, summarize, AVAILABLE_MODELS, getCurrentModelId, setCurrentModelId, clearModelCache } from '../services/llmService';
 import { updateBookProgress, saveUserPreferences, getUserPreferences } from '../services/db';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -61,50 +61,67 @@ const getText = (node: Node, depth: number = 0): string => {
 };
 
 const extractContentFromDoc = (d: Document): { text: string, hasImages: boolean } => {
-    // console.log("DEBUG: extractContentFromDoc called");
+    console.log("DEBUG: extractContentFromDoc called");
+    console.log("DEBUG: Document type:", d.constructor.name);
+    console.log("DEBUG: Has body?", !!d.body);
+    console.log("DEBUG: documentElement:", d.documentElement?.tagName);
 
     // Try multiple approaches to find the body
     let body: Element | null = d.body;
 
     // For XHTML documents with namespaces, try getElementsByTagNameNS
     if (!body) {
+        console.log("DEBUG: No body found, trying namespace approach");
         const xhtmlNS = "http://www.w3.org/1999/xhtml";
         const bodies = d.getElementsByTagNameNS(xhtmlNS, 'body');
         if (bodies && bodies.length > 0) {
             body = bodies[0];
+            console.log("DEBUG: Found body via namespace");
         }
     }
 
     // Fallback to documentElement if still no body
     if (!body) {
+        console.log("DEBUG: Still no body, using documentElement");
         body = d.documentElement;
     }
 
     if (!body) {
+        console.log("DEBUG: No body or documentElement found!");
         return { text: "", hasImages: false };
     }
+
+    console.log("DEBUG: Body found, tag:", body.tagName);
+    console.log("DEBUG: Body children count:", body.children.length);
 
     // Detect visuals
     const images = body.getElementsByTagName('img');
     const svgs = body.getElementsByTagName('svg');
     const hasImages = images.length > 0 || svgs.length > 0;
 
+    console.log("DEBUG: Images found:", images.length);
+
     // IMPORTANT: For XHTML documents, textContent is more reliable than recursive traversal
     // Try textContent first
     let raw = body.textContent || "";
+    console.log("DEBUG: textContent length:", raw.length);
+    console.log("DEBUG: textContent preview:", raw.substring(0, 100));
 
     // If textContent worked, clean it up
     if (raw.trim().length > 0) {
         // Collapse multiple newlines and whitespace
         raw = raw.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+        console.log("DEBUG: Returning text from textContent, final length:", raw.length);
         return { text: raw, hasImages };
     }
 
+    console.log("DEBUG: textContent empty, trying recursive getText");
     // Fallback to recursive getText if textContent didn't work
     raw = getText(body);
 
     // Collapse multiple newlines to max 2 to preserve paragraph breaks but remove huge gaps
     raw = raw.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+    console.log("DEBUG: Returning text from recursive getText, length:", raw.length);
 
     return { text: raw, hasImages };
 };
@@ -225,7 +242,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     const [currentLocation, setCurrentLocation] = useState<string>(initialLocation || ""); // CFI
 
     // View State
-    const [mode, setMode] = useState<ReadingMode>(ReadingMode.ORIGINAL);
+    const [showTranslation, setShowTranslation] = useState(false);
     const [fontSize, setFontSize] = useState(100); // Percentage
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
@@ -260,7 +277,6 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     const renditionRef = useRef<any>(null); // ePub.Rendition
     const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const anchorTextRef = useRef<string | null>(null); // Store text to scroll to
-    const capturedPageTextRef = useRef<string | null>(null); // Store captured page text for translation
 
     // Scroll State
     const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
@@ -312,7 +328,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
     // --- Rendering (Original Mode) ---
     useEffect(() => {
-        if (!bookRef.current || !viewerRef.current || mode !== ReadingMode.ORIGINAL) return;
+        if (!bookRef.current || !viewerRef.current) return;
 
         // Destroy previous rendition if exists to avoid duplicates
         if (renditionRef.current) {
@@ -409,11 +425,149 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 clearTimeout(selectionTimeoutRef.current);
             }
         };
-    }, [mode, bookData]);
+    }, [bookData]);
+
+    // --- Inline Translation - Full Page Replacement ---
+    const removeTranslations = useCallback(() => {
+        if (!renditionRef.current) return;
+
+        try {
+            const contents = renditionRef.current.getContents();
+            if (!contents || contents.length === 0) return;
+
+            const doc = contents[0].document;
+
+            // Check if we have a backup
+            const backup = doc.getElementById('lingobook-original-content');
+            if (backup) {
+                // Restore original content
+                const container = doc.getElementById('lingobook-bilingual-container');
+                if (container && container.parentNode && backup.firstChild) {
+                    // Get the original body content
+                    const originalBody = backup.firstChild as HTMLElement;
+                    // Replace bilingual container's parent (body) children with original
+                    while (doc.body.firstChild) {
+                        doc.body.removeChild(doc.body.firstChild);
+                    }
+                    // Restore from backup
+                    while (originalBody.firstChild) {
+                        doc.body.appendChild(originalBody.firstChild);
+                    }
+                }
+                backup.remove();
+            }
+
+        } catch (e) {
+            console.error("Error removing translations:", e);
+        }
+    }, []);
+
+    const injectTranslations = useCallback(() => {
+        if (!renditionRef.current || translatedSegments.length === 0) return;
+
+        try {
+            const contents = renditionRef.current.getContents();
+            if (!contents || contents.length === 0) return;
+
+            const doc = contents[0].document;
+            const body = doc.body;
+
+            // Always remove previous container if it exists to allow updates
+            const oldContainer = doc.getElementById('lingobook-bilingual-container');
+            if (oldContainer) oldContainer.remove();
+
+            // If we don't have a backup, create it now
+            let backup = doc.getElementById('lingobook-original-content');
+            if (!backup) {
+                console.log("DEBUG: Creating backup of original content");
+                backup = doc.createElement('div');
+                backup.id = 'lingobook-original-content';
+                backup.style.display = 'none';
+                const bodyClone = body.cloneNode(true) as HTMLElement;
+                backup.appendChild(bodyClone);
+                body.appendChild(backup);
+            }
+
+            console.log(`DEBUG: Rebuilding bilingual view with ${translatedSegments.length} segments`);
+
+            // Create bilingual container
+            const bilingualContainer = doc.createElement('div');
+            bilingualContainer.id = 'lingobook-bilingual-container';
+            bilingualContainer.style.cssText = `
+                padding: 2rem 1.5rem;
+                max-width: 900px;
+                margin: 0 auto;
+                font-family: inherit;
+                line-height: 1.8;
+            `;
+
+            // Add each segment as a bilingual block
+            translatedSegments.forEach((segment, index) => {
+                if (!segment.original) return;
+
+                const block = doc.createElement('div');
+                block.id = `segment-${index}`; // Add ID for scrolling
+                block.style.cssText = `
+                    margin-bottom: 2rem;
+                    padding-bottom: 1.5rem;
+                    border-bottom: 1px solid rgba(231, 229, 228, 0.5);
+                `;
+
+                // Original text
+                const originalP = doc.createElement('p');
+                originalP.style.cssText = `
+                    margin: 0 0 0.75rem 0;
+                    color: #292524;
+                    font-size: 1em;
+                    line-height: 1.8;
+                `;
+                originalP.textContent = segment.original;
+                block.appendChild(originalP);
+
+                // Translated text
+                if (segment.translated) {
+                    const translatedP = doc.createElement('p');
+                    translatedP.style.cssText = `
+                        margin: 0;
+                        color: #78716c;
+                        font-style: italic;
+                        font-size: 0.95em;
+                        line-height: 1.7;
+                    `;
+                    translatedP.textContent = segment.translated;
+                    block.appendChild(translatedP);
+                }
+
+                bilingualContainer.appendChild(block);
+            });
+
+            //  Remove all children except backup
+            while (body.firstChild && body.firstChild !== backup) {
+                body.removeChild(body.firstChild);
+            }
+
+            // Insert bilingual container at the beginning
+            body.insertBefore(bilingualContainer, backup);
+
+            console.log(`DEBUG: Bilingual view created/updated successfully`);
+
+        } catch (e) {
+            console.error("Error injecting translations:", e);
+        }
+    }, [translatedSegments]);
+
+    // Effect to trigger injection
+    useEffect(() => {
+        if (showTranslation && translatedSegments.length > 0) {
+            injectTranslations();
+        } else if (!showTranslation) {
+            removeTranslations();
+        }
+    }, [showTranslation, translatedSegments, injectTranslations, removeTranslations]);
 
     // --- Content Extraction & Translation ---
     const fetchAndTranslateCurrentChapter = useCallback(async () => {
-        if (!bookRef.current) return;
+        if (!bookRef.current || !renditionRef.current) return;
 
         setIsTranslating(true);
         setStatusMessage("Translating...");
@@ -422,97 +576,50 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
         setScrollToIndex(null); // Reset scroll target
 
         try {
-            // 1. Check if we have pre-captured page text from mode switch (PAGE-SCOPED TRANSLATION)
-            if (capturedPageTextRef.current) {
-                console.log("DEBUG: Using pre-captured page text for translation (page-scoped)");
-                const pageText = capturedPageTextRef.current;
+            // Extract text from ONLY the visible viewport using CFI range
+            console.log("DEBUG: Extracting text from visible page using CFI range");
 
-                // Clear after use so subsequent navigations load fresh
-                capturedPageTextRef.current = null;
-
-                console.log("DEBUG: Captured text length:", pageText.length);
-                console.log("DEBUG: Preview:", pageText.substring(0, 200));
-
-                setPageType('text');
-                setRawText(pageText);
-
-                // Translate the captured page text
-                await translateTextSegments(
-                    pageText,
-                    "English",
-                    (status) => {
-                        setStatusMessage(status);
-                    },
-                    (segment) => {
-                        setTranslatedSegments(prev => {
-                            const newSegments = [...prev, segment];
-
-                            // Check if we need to scroll to a specific segment
-                            if (anchorTextRef.current && prev.length < newSegments.length) {
-                                const newSegmentIndex = newSegments.length - 1;
-                                const newSegment = newSegments[newSegmentIndex];
-
-                                if (newSegment.original.includes(anchorTextRef.current) ||
-                                    anchorTextRef.current.includes(newSegment.original)) {
-                                    console.log(`DEBUG: Found matching segment at index ${newSegmentIndex}`);
-                                    setScrollToIndex(newSegmentIndex);
-                                    anchorTextRef.current = null;
-                                }
-                            }
-                            return newSegments;
-                        });
-                    }
-                );
-
-                setIsTranslating(false);
-                return; // Exit early - page-scoped translation complete
+            // Get the current visible location (start and end CFI)
+            const location = renditionRef.current.currentLocation();
+            if (!location || !location.start || !location.end) {
+                throw new Error("No current location available");
             }
 
-            // 2. No captured text - load from spine (CHAPTER-SCOPED TRANSLATION for navigation)
-            console.log("DEBUG: No captured text, loading from spine (chapter-scoped)");
+            console.log("DEBUG: Visible range - Start CFI:", location.start.cfi);
+            console.log("DEBUG: Visible range - End CFI:", location.end.cfi);
 
-            // Get current chapter/spine item from the tracked location
-            // Use the currentLocation state which is reliably updated by the 'relocated' event
-            let locationCfi = currentLocation;
-
-            // Fallback: try to get from rendition if state is empty
-            if (!locationCfi && renditionRef.current) {
-                const loc = renditionRef.current.currentLocation();
-                if (loc && loc.start) {
-                    locationCfi = loc.start.cfi;
-                }
+            const contents = renditionRef.current.getContents();
+            if (!contents || contents.length === 0) {
+                throw new Error("No contents available in rendition");
             }
 
-            if (!locationCfi) {
-                throw new Error("No current location found");
+            // Get the visible range from the CFI
+            const startRange = contents[0].range(location.start.cfi);
+            const endRange = contents[0].range(location.end.cfi);
+
+            if (!startRange || !endRange) {
+                throw new Error("Could not create ranges from CFI");
             }
 
-            console.log("DEBUG: fetchAndTranslateCurrentChapter - Using location CFI:", locationCfi);
+            // Create a range that spans from start to end of visible content
+            const visibleRange = startRange.cloneRange();
+            visibleRange.setEnd(endRange.endContainer, endRange.endOffset);
 
-            // 2. Get the spine item for this location
-            const spineItem = bookRef.current.spine.get(locationCfi);
-            if (!spineItem) {
-                throw new Error("No spine item found for current location");
-            }
+            // Extract text from only this visible range
+            let pageText = visibleRange.toString();
+            console.log("DEBUG: Extracted visible text length:", pageText.length);
+            console.log("DEBUG: Text preview:", pageText.substring(0, 200));
 
-            console.log("DEBUG: Loading chapter from spine item");
+            // Check for images in the visible content
+            const doc = contents[0].document;
+            let hasImages = false;
 
-            // 3. Load the document for this spine item
-            const doc = await spineItem.load(bookRef.current.load.bind(bookRef.current));
-            if (!doc) {
-                throw new Error("No document found in spine item");
-            }
-
-            console.log("DEBUG: Document loaded, attempting to extract text");
-
-            // 4. Extract text and check for images
-            const extraction = extractTextFromChapter(doc);
-            const pageText = extraction.text;
-            const hasImages = extraction.hasImages;
-
-            console.log("DEBUG: Extracted text length:", pageText.length);
-            if (pageText.length > 0) {
-                console.log("DEBUG: Text preview:", pageText.substring(0, 200));
+            // Try to detect if there are images in the visible range
+            // This is approximate since we're working with a text range
+            if (doc && doc.body) {
+                const allImages = doc.body.getElementsByTagName('img');
+                const allSvgs = doc.body.getElementsByTagName('svg');
+                hasImages = allImages.length > 0 || allSvgs.length > 0;
             }
 
             if (!pageText || pageText.trim().length === 0) {
@@ -531,16 +638,15 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 return;
             }
 
+            // Clean up the text
+            pageText = pageText.trim();
+
             setPageType('text');
             setRawText(pageText);
 
-            // 5. Translate the page text
-            // Since we're now extracting only the current page, we don't need anchor text scoping
-            // The page text is already scoped to what's visible
-            let textToTranslate = pageText;
-
+            // Translate ONLY the visible page text
             await translateTextSegments(
-                textToTranslate,
+                pageText,
                 "English",
                 (status) => {
                     setStatusMessage(status);
@@ -550,46 +656,38 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                         const newSegments = [...prev, segment];
 
                         // Check if we need to scroll to a specific segment
-                        // We do this here to catch it as soon as the segment is available
                         if (anchorTextRef.current && prev.length < newSegments.length) {
                             const newSegmentIndex = newSegments.length - 1;
                             const newSegment = newSegments[newSegmentIndex];
 
-                            // Simple containment check: if the anchor text is found within this segment
-                            // or if this segment is found within the anchor text (for partial matches)
                             if (newSegment.original.includes(anchorTextRef.current) ||
                                 anchorTextRef.current.includes(newSegment.original)) {
                                 console.log(`DEBUG: Found matching segment at index ${newSegmentIndex}`);
                                 setScrollToIndex(newSegmentIndex);
-                                anchorTextRef.current = null; // Clear anchor so we don't keep scrolling
+                                anchorTextRef.current = null;
                             }
                         }
                         return newSegments;
                     });
                 }
             );
-            // The final return value is not strictly needed if we update incrementally, 
-            // but we can use it to ensure consistency if needed. 
-            // For now, the incremental updates are sufficient.
 
         } catch (error) {
             console.error("Error extracting/translating:", error);
 
             // Provide more specific error messages based on the error type
-            let errorMessage = "Please try navigating to the next chapter.";
+            let errorMessage = "Please try navigating to the next page.";
             let originalMessage = "Error loading content.";
 
             if (error instanceof Error) {
                 console.error("Error details:", error.message, error.stack);
 
-                if (error.message.includes("Rendition not available")) {
-                    errorMessage = "Reader not initialized. Please try again in a moment.";
-                } else if (error.message.includes("No current location")) {
-                    errorMessage = "Unable to determine current page location. Try navigating to another page.";
-                } else if (error.message.includes("No spine item found")) {
-                    errorMessage = "Could not find the current chapter. Try navigating to the next chapter.";
-                } else if (error.message.includes("No contents available") || error.message.includes("No document found")) {
-                    errorMessage = "This page's content could not be accessed. Try navigating to the next page.";
+                if (error.message.includes("No current location")) {
+                    errorMessage = "Unable to determine visible content. Try navigating to another page.";
+                } else if (error.message.includes("No contents available")) {
+                    errorMessage = "Page content not ready. Please try again in a moment.";
+                } else if (error.message.includes("Could not create ranges")) {
+                    errorMessage = "Unable to extract visible text. Try navigating to another page.";
                 }
             }
 
@@ -600,75 +698,21 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
         } finally {
             setIsTranslating(false);
         }
-    }, [currentLocation]);
+    }, []);
 
-    // --- Mode Switching Handlers ---
-    const handleModeChange = (newMode: ReadingMode) => {
-        // Capture visible page text when switching FROM original mode TO translation mode
-        if (mode === ReadingMode.ORIGINAL && newMode !== ReadingMode.ORIGINAL && renditionRef.current) {
-            try {
-                const contents = renditionRef.current.getContents();
-                if (contents && contents.length > 0) {
-                    const content = contents[0];
-                    const doc = content.document;
-
-                    // Get the visible viewport text using CFI ranges
-                    const loc = renditionRef.current.currentLocation();
-                    if (loc && loc.start && loc.end) {
-                        try {
-                            const startRange = renditionRef.current.getRange(loc.start.cfi);
-                            const endRange = renditionRef.current.getRange(loc.end.cfi);
-
-                            if (startRange && endRange) {
-                                const pageRange = doc.createRange();
-                                pageRange.setStart(startRange.startContainer, startRange.startOffset);
-                                pageRange.setEnd(endRange.endContainer, endRange.endOffset);
-
-                                capturedPageTextRef.current = pageRange.toString().trim();
-                                console.log("DEBUG: Captured visible page text, length:", capturedPageTextRef.current.length);
-                                console.log("DEBUG: Preview:", capturedPageTextRef.current.substring(0, 100));
-                            }
-                        } catch (err) {
-                            console.warn("Could not capture page range, trying body text:", err);
-                            // Fallback: use body text (may include more than visible page)
-                            capturedPageTextRef.current = doc.body?.textContent?.trim() || null;
-                        }
-                    }
-                } else {
-                    console.warn("No contents available for text capture");
-                }
-            } catch (e) {
-                console.error("Error capturing page text:", e);
-                capturedPageTextRef.current = null;
-            }
-
-            // Also capture anchor text for scrolling to matching segment
-            try {
-                const loc = renditionRef.current.currentLocation();
-                if (loc && loc.start && loc.start.cfi) {
-                    const range = renditionRef.current.getRange(loc.start.cfi);
-                    if (range) {
-                        const text = range.toString().trim();
-                        if (text.length > 0) {
-                            anchorTextRef.current = text.substring(0, 200);
-                            console.log("DEBUG: Captured anchor text for scrolling");
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("Error capturing anchor text:", e);
-            }
-        } else {
-            // Clear captured text when not switching to translation mode
-            capturedPageTextRef.current = null;
-            anchorTextRef.current = null;
-        }
-
-        setMode(newMode);
+    // --- Translation Toggle Handler ---
+    const handleTranslationToggle = () => {
+        const newValue = !showTranslation;
+        setShowTranslation(newValue);
         setShowAppearance(false);
-        if (newMode !== ReadingMode.ORIGINAL) {
-            // Trigger translation logic immediately
+
+        if (newValue) {
+            // Trigger translation when enabled
             setTimeout(() => fetchAndTranslateCurrentChapter(), 0);
+        } else {
+            // Clear translations when disabled
+            setTranslatedSegments([]);
+            // TODO: Remove injected translations from DOM
         }
     };
 
@@ -733,46 +777,9 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
     // --- Navigation ---
     const navigate = (direction: 'next' | 'prev') => {
-        if (mode === ReadingMode.ORIGINAL) {
-            // In original mode, we just turn pages
-            if (direction === 'next') renditionRef.current?.next();
-            else renditionRef.current?.prev();
-        } else {
-            // In translation mode, we skip chapters (Spine items)
-            if (!bookRef.current) return;
-
-            let currentCfi = currentLocation;
-            if (!currentCfi && renditionRef.current) {
-                const loc = renditionRef.current.currentLocation();
-                if (loc && loc.start) currentCfi = loc.start.cfi;
-            }
-
-            const currentSpineItem = currentCfi
-                ? bookRef.current.spine.get(currentCfi)
-                : bookRef.current.spine.get(0);
-
-            if (!currentSpineItem) return;
-
-            const nextIndex = direction === 'next'
-                ? currentSpineItem.index + 1
-                : currentSpineItem.index - 1;
-
-            const nextSpineItem = bookRef.current.spine.get(nextIndex);
-
-            if (nextSpineItem) {
-                // Use rendition to update location if available, keeping sync
-                if (renditionRef.current) {
-                    renditionRef.current.display(nextSpineItem.href).then(() => {
-                        // Event listener triggers translation
-                    });
-                } else {
-                    // If navigating blindly without rendition (rare), manually update
-                    // But since we destroy rendition only on mode change, it should exist in background?
-                    // Actually, in split mode, we hide the container but rendition exists.
-                    if (renditionRef.current) renditionRef.current.display(nextSpineItem.href);
-                }
-            }
-        }
+        // Always use page-based navigation
+        if (direction === 'next') renditionRef.current?.next();
+        else renditionRef.current?.prev();
     };
 
     const handleTocClick = (href: string) => {
@@ -867,118 +874,9 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
     };
 
 
-    // --- Render Custom Views ---
-    const renderCustomView = () => {
-        // if (isTranslating) {
-        //     return <LoadingSpinner message={statusMessage} className="mt-40" />;
-        // }
-
-        // Handle Empty / Image Pages
-        if (pageType === 'image') {
-            return (
-                <div className="flex flex-col items-center justify-center h-full p-12 text-center space-y-6">
-                    <div className="w-20 h-20 bg-stone-200 rounded-full flex items-center justify-center">
-                        <ImageIcon className="w-10 h-10 text-stone-400" />
-                    </div>
-                    <div className="space-y-2 max-w-md">
-                        <h3 className="text-xl font-semibold font-serif-apple">Visual Content</h3>
-                        <p className="text-stone-500">
-                            This section contains images. Switch to <strong>Original</strong> mode to view them properly.
-                        </p>
-                    </div>
-                    <div className="flex gap-4 pt-4">
-                        <button
-                            onClick={() => handleModeChange(ReadingMode.ORIGINAL)}
-                            className="px-6 py-2.5 bg-stone-900 text-white rounded-full text-sm font-medium shadow-lg shadow-stone-200 hover:scale-105 transition-transform"
-                        >
-                            Switch to Original
-                        </button>
-                        <button
-                            onClick={() => navigate('next')}
-                            className="px-6 py-2.5 bg-white border border-stone-200 text-stone-900 rounded-full text-sm font-medium hover:bg-stone-50 transition-colors"
-                        >
-                            Next Chapter
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        if (pageType === 'empty' || (translatedSegments.length === 0 && !isTranslating)) {
-            return (
-                <div className="flex flex-col items-center justify-center h-full p-12 text-center space-y-6">
-                    <div className="space-y-2 max-w-md">
-                        <h3 className="text-lg font-medium text-stone-400">End of Chapter Content</h3>
-                        <p className="text-stone-400 text-sm">There is no text to translate in this section.</p>
-                    </div>
-                    <button
-                        onClick={() => navigate('next')}
-                        className="px-8 py-3 bg-stone-900 text-white rounded-full text-sm font-medium hover:bg-stone-800 transition-colors shadow-lg"
-                    >
-                        Next Chapter
-                    </button>
-                </div>
-            );
-        }
-
-        const containerClass = `
-        h-full w-full overflow-y-auto p-6 md:p-12 max-w-5xl mx-auto no-scrollbar
-        bg-[#f8f4e9] text-stone-800
-      `;
-
-        const textStyle = { fontSize: `${fontSize / 100}rem`, lineHeight: '1.6' };
-
-        if (mode === ReadingMode.SPLIT) {
-            return (
-                <div className={`${containerClass} flex flex-col md:flex-row gap-8 pb-32`}>
-                    <div className={`flex-1 border-b md:border-b-0 md:border-r pb-8 md:pb-0 md:pr-8 border-stone-300`}>
-                        <h3 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-6 select-none">Original</h3>
-                        <div className="space-y-4">
-                            {translatedSegments.map((seg, i) => (
-                                <p key={`orig-${i}`} id={`segment-${i}`} className="font-serif-apple whitespace-pre-wrap" style={textStyle}>{seg.original}</p>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-6 text-orange-600 select-none">English</h3>
-                        <div className="space-y-4">
-                            {translatedSegments.map((seg, i) => (
-                                <p key={`trans-${i}`} className="font-serif-apple whitespace-pre-wrap" style={textStyle}>{seg.translated}</p>
-                            ))}
-                            {isTranslating && (
-                                <div className="flex items-center gap-2 text-stone-400 animate-pulse py-4">
-                                    <div className="w-2 h-2 bg-stone-400 rounded-full"></div>
-                                    <span className="text-xs">{statusMessage}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        if (mode === ReadingMode.INTERLEAVED) {
-            return (
-                <div className={`${containerClass} space-y-8 pb-32`}>
-                    {translatedSegments.map((seg, i) => (
-                        <div key={i} id={`segment-${i}`} className="space-y-3">
-                            <p className="font-serif-apple font-medium whitespace-pre-wrap" style={textStyle}>{seg.original}</p>
-                            <p className="font-sans text-stone-500/80 italic" style={{ ...textStyle, fontSize: `${(fontSize / 100) * 0.95}rem` }}>
-                                {seg.translated}
-                            </p>
-                        </div>
-                    ))}
-                    {isTranslating && (
-                        <div className="flex items-center justify-center gap-2 text-stone-400 animate-pulse py-8">
-                            <div className="w-2 h-2 bg-stone-400 rounded-full"></div>
-                            <span className="text-xs">{statusMessage}</span>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-        return null;
-    };
+    // --- Custom View Rendering (Removed - now using inline translation) ---
+    // Split and Interleaved modes have been removed.
+    // Translation is now injected directly into the EPUB view.
 
 
     // --- Styles for Sepia Theme ---
@@ -1016,18 +914,12 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
 
             {/* --- Main Viewer Area --- */}
             <div className="flex-1 relative w-full h-full overflow-hidden">
-                {/* Original ePub View */}
+                {/* EPUB View - Always visible */}
                 <div
                     ref={viewerRef}
-                    className={`w-full h-full ${mode === ReadingMode.ORIGINAL ? 'block' : 'hidden'}`}
+                    className="w-full h-full"
                 />
 
-                {/* Custom Translated Views */}
-                {mode !== ReadingMode.ORIGINAL && (
-                    <div className="w-full h-full overflow-hidden relative">
-                        {renderCustomView()}
-                    </div>
-                )}
 
                 {/* --- Floating Translate Button --- */}
                 {showTranslateButton && selection && selection.rect && (
@@ -1168,9 +1060,7 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
                 </button>
 
                 <span className="text-xs font-medium uppercase tracking-wider opacity-50 truncate max-w-[200px] select-none">
-                    {mode === ReadingMode.ORIGINAL
-                        ? (metadata ? metadata.title : 'Chapter')
-                        : 'Translated View'}
+                    {metadata ? metadata.title : 'Chapter'}
                 </span>
 
                 <button onClick={() => navigate('next')} className="p-2 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100">
@@ -1185,25 +1075,16 @@ export const Reader: React.FC<ReaderProps> = ({ bookData, bookId, initialLocatio
             absolute top-16 right-4 w-72 rounded-xl shadow-2xl z-[60] p-4 transform transition-all
             bg-[#f8f4e9]/95 backdrop-blur-xl border border-stone-300
           `}>
-                        {/* Modes */}
-                        <div className="flex bg-stone-200/50 p-1 rounded-lg mb-4">
+                        {/* Translation Toggle */}
+                        <div className="flex items-center justify-between px-2 mb-4 pb-4 border-b border-stone-200/20">
+                            <span className="text-[10px] uppercase tracking-widest opacity-50 font-semibold">Translation</span>
                             <button
-                                onClick={() => handleModeChange(ReadingMode.ORIGINAL)}
-                                className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${mode === ReadingMode.ORIGINAL ? 'bg-white shadow-sm text-black' : 'text-stone-500'}`}
+                                onClick={handleTranslationToggle}
+                                className={`relative w-12 h-6 rounded-full transition-colors ${showTranslation ? 'bg-orange-500' : 'bg-stone-300'
+                                    }`}
                             >
-                                Original
-                            </button>
-                            <button
-                                onClick={() => handleModeChange(ReadingMode.SPLIT)}
-                                className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${mode === ReadingMode.SPLIT ? 'bg-white shadow-sm text-black' : 'text-stone-500'}`}
-                            >
-                                Split
-                            </button>
-                            <button
-                                onClick={() => handleModeChange(ReadingMode.INTERLEAVED)}
-                                className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${mode === ReadingMode.INTERLEAVED ? 'bg-white shadow-sm text-black' : 'text-stone-500'}`}
-                            >
-                                Lines
+                                <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${showTranslation ? 'translate-x-full' : ''
+                                    }`} />
                             </button>
                         </div>
 

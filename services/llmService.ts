@@ -41,29 +41,86 @@ export const setCurrentModelId = (id: string) => {
 };
 
 let engine: MLCEngine | null = null;
+let initAttempted = false;
 
 export const initLLM = async (progressCallback?: (report: { text: string }) => void) => {
     if (engine) return engine;
 
-    engine = await CreateMLCEngine(currentModelId, {
-        initProgressCallback: progressCallback,
-    });
-    return engine;
+    try {
+        console.log(`Initializing WebLLM with model: ${currentModelId}`);
+
+        engine = await CreateMLCEngine(currentModelId, {
+            initProgressCallback: progressCallback,
+            // Use app config to help with cache management
+            appConfig: prebuiltAppConfig,
+        });
+
+        console.log("WebLLM engine initialized successfully");
+        initAttempted = false; // Reset on success
+        return engine;
+    } catch (error) {
+        console.error("Failed to initialize WebLLM:", error);
+        engine = null;
+
+        // Provide more helpful error message and auto-retry once with cache clear
+        if (error instanceof Error) {
+            if ((error.message.includes("Cache") || error.message.includes("network")) && !initAttempted) {
+                console.warn("Model initialization failed with cache/network error. Clearing cache and retrying...");
+                initAttempted = true;
+
+                // Clear all caches
+                await clearModelCache();
+
+                // Wait a bit for cache to clear
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Retry initialization
+                console.log("Retrying model initialization after cache clear...");
+                try {
+                    engine = await CreateMLCEngine(currentModelId, {
+                        initProgressCallback: progressCallback,
+                        appConfig: prebuiltAppConfig,
+                    });
+                    console.log("WebLLM engine initialized successfully on retry");
+                    initAttempted = false;
+                    return engine;
+                } catch (retryError) {
+                    console.error("Retry also failed:", retryError);
+                    initAttempted = false;
+                    throw new Error("Failed to download model files after clearing cache. Please check your internet connection and try again. The model files are quite large (~2-8GB) and require a stable connection.");
+                }
+            }
+
+            if (error.message.includes("Cache") || error.message.includes("network")) {
+                throw new Error("Failed to download model files. Please check your internet connection and try again. If the problem persists, try clearing the model cache from the appearance menu.");
+            }
+        }
+        throw error;
+    }
 };
 
 export const clearModelCache = async () => {
     if ('caches' in window) {
         try {
             const cacheNames = await caches.keys();
+            console.log("Available caches:", cacheNames);
+
+            // Delete ALL WebLLM-related caches, not just the current model
             const removalPromises = cacheNames.map(name => {
-                if (name.includes("webllm") || name.includes(currentModelId)) {
+                // More aggressive matching - delete anything that looks like WebLLM
+                if (name.includes("webllm") ||
+                    name.includes("mlc") ||
+                    name.includes("web-llm") ||
+                    name.includes("huggingface") ||
+                    name.includes("xethub") ||
+                    name.includes("hf.co")) {
                     console.log(`Deleting cache: ${name}`);
                     return caches.delete(name);
                 }
                 return Promise.resolve(false);
             });
             await Promise.all(removalPromises);
-            console.log("Model cache cleared.");
+            console.log("All WebLLM caches cleared.");
 
             // Also reset the engine instance so it re-initializes
             engine = null;

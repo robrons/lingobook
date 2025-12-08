@@ -1,9 +1,3 @@
-export enum ReadingMode {
-  ORIGINAL = 'ORIGINAL',
-  SPLIT = 'SPLIT', // Side by side
-  INTERLEAVED = 'INTERLEAVED', // Line by line
-}
-
 export enum Theme {
   LIGHT = 'LIGHT',
   SEPIA = 'SEPIA',
