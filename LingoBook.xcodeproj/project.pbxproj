@@ -1,0 +1,624 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2E54DCA12EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG001001 /* ZIPFoundation */; };
+		2E54DCA22EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG002001 /* ZIPFoundation */; };
+		AST001001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000 /* Assets.xcassets */; };
+		AST001002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000 /* Assets.xcassets */; };
+		IOS001001 /* LingoBookiPadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = IOS001000 /* LingoBookiPadApp.swift */; };
+		MAC001001 /* LingoBookMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAC001000 /* LingoBookMacApp.swift */; };
+		SH001001 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
+		SH001002 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
+		SH002001 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
+		SH002002 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
+		SH003001 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
+		SH003002 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
+		SH004001 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
+		SH004002 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
+		SH005001 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
+		SH005002 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
+		SH006001 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH006000 /* Clipboard.swift */; };
+		SH006002 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH006000 /* Clipboard.swift */; };
+		SH007001 /* ReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH007000 /* ReaderViewModel.swift */; };
+		SH007002 /* ReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH007000 /* ReaderViewModel.swift */; };
+		SH008001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH008000 /* ContentView.swift */; };
+		SH008002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH008000 /* ContentView.swift */; };
+		SH009001 /* BookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH009000 /* BookCard.swift */; };
+		SH009002 /* BookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH009000 /* BookCard.swift */; };
+		SH010001 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH010000 /* LibraryView.swift */; };
+		SH010002 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH010000 /* LibraryView.swift */; };
+		SH011001 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
+		SH011002 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
+		SH012001 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
+		SH012002 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
+		SH013001 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
+		SH013002 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
+		SH014001 /* PageNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH014000 /* PageNavigator.swift */; };
+		SH014002 /* PageNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH014000 /* PageNavigator.swift */; };
+		SH015001 /* ThemeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH015000 /* ThemeSettings.swift */; };
+		SH015002 /* ThemeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH015000 /* ThemeSettings.swift */; };
+		SH016001 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH016000 /* ReaderView.swift */; };
+		SH016002 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH016000 /* ReaderView.swift */; };
+		SH017001 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
+		SH017002 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
+		SH018001 /* SummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH018000 /* SummarySheet.swift */; };
+		SH018002 /* SummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH018000 /* SummarySheet.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AST001000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		IOS001000 /* LingoBookiPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookiPadApp.swift; sourceTree = "<group>"; };
+		MAC001000 /* LingoBookMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookMacApp.swift; sourceTree = "<group>"; };
+		MAC002000 /* LingoBook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LingoBook.entitlements; sourceTree = "<group>"; };
+		PRD001000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		PRD002000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		SH001000 /* Book.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Book.swift; sourceTree = "<group>"; };
+		SH002000 /* EPUBService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EPUBService.swift; sourceTree = "<group>"; };
+		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
+		SH004000 /* SummarizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarizationService.swift; sourceTree = "<group>"; };
+		SH005000 /* PlatformImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformImage.swift; sourceTree = "<group>"; };
+		SH006000 /* Clipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Clipboard.swift; sourceTree = "<group>"; };
+		SH007000 /* ReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderViewModel.swift; sourceTree = "<group>"; };
+		SH008000 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		SH009000 /* BookCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCard.swift; sourceTree = "<group>"; };
+		SH010000 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		SH011000 /* BookTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTheme.swift; sourceTree = "<group>"; };
+		SH012000 /* PageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageView.swift; sourceTree = "<group>"; };
+		SH013000 /* ReaderToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderToolbar.swift; sourceTree = "<group>"; };
+		SH014000 /* PageNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNavigator.swift; sourceTree = "<group>"; };
+		SH015000 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
+		SH016000 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		SH017000 /* TOCSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOCSheet.swift; sourceTree = "<group>"; };
+		SH018000 /* SummarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarySheet.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FRM001000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E54DCA12EE735FE00F63A61 /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FRM002000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E54DCA22EE735FE00F63A61 /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		GRP000000 = {
+			isa = PBXGroup;
+			children = (
+				GRP001000 /* Shared */,
+				GRP002000 /* macOS */,
+				GRP003000 /* iOS */,
+				GRP004000 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		GRP001000 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				AST001000 /* Assets.xcassets */,
+				GRP001001 /* Models */,
+				GRP001002 /* Services */,
+				GRP001003 /* Utilities */,
+				GRP001004 /* ViewModels */,
+				GRP001005 /* Views */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		GRP001001 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				SH001000 /* Book.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		GRP001002 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				SH002000 /* EPUBService.swift */,
+				SH003000 /* TranslationService.swift */,
+				SH004000 /* SummarizationService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		GRP001003 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				SH005000 /* PlatformImage.swift */,
+				SH006000 /* Clipboard.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		GRP001004 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				SH007000 /* ReaderViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		GRP001005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				SH008000 /* ContentView.swift */,
+				GRP001006 /* Library */,
+				GRP001007 /* Reader */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		GRP001006 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				SH009000 /* BookCard.swift */,
+				SH010000 /* LibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		GRP001007 /* Reader */ = {
+			isa = PBXGroup;
+			children = (
+				SH011000 /* BookTheme.swift */,
+				SH012000 /* PageView.swift */,
+				SH013000 /* ReaderToolbar.swift */,
+				SH014000 /* PageNavigator.swift */,
+				SH015000 /* ThemeSettings.swift */,
+				SH016000 /* ReaderView.swift */,
+				SH017000 /* TOCSheet.swift */,
+				SH018000 /* SummarySheet.swift */,
+			);
+			path = Reader;
+			sourceTree = "<group>";
+		};
+		GRP002000 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				MAC001000 /* LingoBookMacApp.swift */,
+				MAC002000 /* LingoBook.entitlements */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		GRP003000 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				IOS001000 /* LingoBookiPadApp.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		GRP004000 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				PRD001000 /* LingoBook.app */,
+				PRD002000 /* LingoBook.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		TGT001000 /* LingoBook (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG001000 /* Build configuration list for PBXNativeTarget "LingoBook (macOS)" */;
+			buildPhases = (
+				SRC001000 /* Sources */,
+				FRM001000 /* Frameworks */,
+				RES001000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "LingoBook (macOS)";
+			packageProductDependencies = (
+				PKG001001 /* ZIPFoundation */,
+			);
+			productName = LingoBook;
+			productReference = PRD001000 /* LingoBook.app */;
+			productType = "com.apple.product-type.application";
+		};
+		TGT002000 /* LingoBook (iPadOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG002000 /* Build configuration list for PBXNativeTarget "LingoBook (iPadOS)" */;
+			buildPhases = (
+				SRC002000 /* Sources */,
+				FRM002000 /* Frameworks */,
+				RES002000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "LingoBook (iPadOS)";
+			packageProductDependencies = (
+				PKG002001 /* ZIPFoundation */,
+			);
+			productName = LingoBook;
+			productReference = PRD002000 /* LingoBook.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PRJ000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					TGT001000 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					TGT002000 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = CFG000000 /* Build configuration list for PBXProject "LingoBook" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = GRP000000;
+			packageReferences = (
+				PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
+			productRefGroup = GRP004000 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TGT001000 /* LingoBook (macOS) */,
+				TGT002000 /* LingoBook (iPadOS) */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RES001000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AST001001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		RES002000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AST001002 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		SRC001000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MAC001001 /* LingoBookMacApp.swift in Sources */,
+				SH001001 /* Book.swift in Sources */,
+				SH002001 /* EPUBService.swift in Sources */,
+				SH003001 /* TranslationService.swift in Sources */,
+				SH004001 /* SummarizationService.swift in Sources */,
+				SH005001 /* PlatformImage.swift in Sources */,
+				SH006001 /* Clipboard.swift in Sources */,
+				SH007001 /* ReaderViewModel.swift in Sources */,
+				SH008001 /* ContentView.swift in Sources */,
+				SH009001 /* BookCard.swift in Sources */,
+				SH010001 /* LibraryView.swift in Sources */,
+				SH011001 /* BookTheme.swift in Sources */,
+				SH012001 /* PageView.swift in Sources */,
+				SH013001 /* ReaderToolbar.swift in Sources */,
+				SH014001 /* PageNavigator.swift in Sources */,
+				SH015001 /* ThemeSettings.swift in Sources */,
+				SH016001 /* ReaderView.swift in Sources */,
+				SH017001 /* TOCSheet.swift in Sources */,
+				SH018001 /* SummarySheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		SRC002000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				IOS001001 /* LingoBookiPadApp.swift in Sources */,
+				SH001002 /* Book.swift in Sources */,
+				SH002002 /* EPUBService.swift in Sources */,
+				SH003002 /* TranslationService.swift in Sources */,
+				SH004002 /* SummarizationService.swift in Sources */,
+				SH005002 /* PlatformImage.swift in Sources */,
+				SH006002 /* Clipboard.swift in Sources */,
+				SH007002 /* ReaderViewModel.swift in Sources */,
+				SH008002 /* ContentView.swift in Sources */,
+				SH009002 /* BookCard.swift in Sources */,
+				SH010002 /* LibraryView.swift in Sources */,
+				SH011002 /* BookTheme.swift in Sources */,
+				SH012002 /* PageView.swift in Sources */,
+				SH013002 /* ReaderToolbar.swift in Sources */,
+				SH014002 /* PageNavigator.swift in Sources */,
+				SH015002 /* ThemeSettings.swift in Sources */,
+				SH016002 /* ReaderView.swift in Sources */,
+				SH017002 /* TOCSheet.swift in Sources */,
+				SH018002 /* SummarySheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		CFG000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CFG000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		CFG001001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = macOS/LingoBook.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.mac;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CFG001002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = macOS/LingoBook.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.mac;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		CFG002001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.ipad;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		CFG002002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.ipad;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CFG000000 /* Build configuration list for PBXProject "LingoBook" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG000001 /* Debug */,
+				CFG000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG001000 /* Build configuration list for PBXNativeTarget "LingoBook (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG001001 /* Debug */,
+				CFG001002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG002000 /* Build configuration list for PBXNativeTarget "LingoBook (iPadOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG002001 /* Debug */,
+				CFG002002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PKG001001 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		PKG002001 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = PRJ000000 /* Project object */;
+}
