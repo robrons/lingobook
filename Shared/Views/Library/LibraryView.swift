@@ -409,52 +409,73 @@ struct LibraryView: View {
 
 // MARK: - Continue Reading
 
-/// A book you're partway through, shown bigger than the shelf behind it.
+/// A book you're partway through — Books' Continue strip: a compact tinted pill with a
+/// thumbnail cover, not a second full-size cover competing with the shelf below it.
 private struct ContinueReadingCard: View {
     let book: Book
 
-    /// Taller than a grid cover, which sits at roughly 220pt for the 140pt-minimum
-    /// columns. The section is meant to read as the shelf's headline; at 180 it came out
-    /// *smaller* than the books below it and the emphasis landed backwards.
-    private let coverHeight: CGFloat = 260
+    private let coverHeight: CGFloat = 84
     private var coverWidth: CGFloat { coverHeight * 2 / 3 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 14) {
             BookCover(book: book)
                 .frame(width: coverWidth, height: coverHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(book.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(2)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
 
                 Text(book.author)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .opacity(0.8)
                     .lineLimit(1)
 
-                ProgressView(value: min(max(book.readingProgress, 0), 1))
-                    .progressViewStyle(.linear)
-                    .tint(.accentColor)
-                    .padding(.top, 2)
-
-                Text("\(book.progressPercent)%")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Text("Book · \(book.progressPercent)%")
+                    .font(.caption)
+                    .opacity(0.65)
                     .monospacedDigit()
+                    .padding(.top, 6)
             }
-            .frame(width: coverWidth, alignment: .leading)
+
+            Spacer(minLength: 12)
         }
+        .foregroundStyle(.white)
+        .padding(12)
+        .frame(maxWidth: 340)
+        .background(
+            // The pill takes its colour from the book so the strip reads as "your
+            // books", not a row of identical grey buttons.
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.generatedCoverTint(for: book.title).gradient)
+        )
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(book.accessibilityDescription)
+    }
+}
+
+extension Color {
+    /// A shelf-friendly tint chosen by hashing the title.
+    ///
+    /// Hashing rather than randomising so the same book is the same colour every
+    /// launch; the palette is Books-ish board colours, dark enough for white text.
+    static func generatedCoverTint(for title: String) -> Color {
+        let palette: [Color] = [
+            Color(red: 0.13, green: 0.42, blue: 0.22),  // bottle green
+            Color(red: 0.16, green: 0.32, blue: 0.52),  // ink blue
+            Color(red: 0.52, green: 0.20, blue: 0.16),  // brick
+            Color(red: 0.36, green: 0.26, blue: 0.47),  // plum
+            Color(red: 0.55, green: 0.38, blue: 0.12),  // ochre
+            Color(red: 0.14, green: 0.38, blue: 0.40)   // teal
+        ]
+        // A stable hash: Swift's hashValue is seeded per-launch, which would repaint
+        // the shelf on every start.
+        let stable = title.unicodeScalars.reduce(5381 as UInt64) { ($0 << 5) &+ $0 &+ UInt64($1.value) }
+        return palette[Int(stable % UInt64(palette.count))]
     }
 }
 
@@ -474,19 +495,45 @@ struct BookCover: View {
                 .aspectRatio(contentMode: .fill)
             #endif
         } else {
+            // Books' treatment of a coverless book: a solid tinted board with the title
+            // set on it in serif caps, so the cover itself says which book this is. The
+            // tint is derived from the title, stable across launches, so each book keeps
+            // its own colour and a shelf of stand-ins doesn't read as one orange blur.
+            let tint = Color.generatedCoverTint(for: book.title)
+
             LinearGradient(
-                colors: [.orange, .orange.opacity(0.7)],
+                colors: [tint, tint.opacity(0.75)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .overlay {
-                Image(systemName: "book.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.white.opacity(0.5))
+                GeometryReader { geo in
+                    VStack(spacing: geo.size.height * 0.04) {
+                        Spacer()
+
+                        Text(book.title)
+                            .font(.system(size: geo.size.height * 0.11, design: .serif))
+                            .fontWeight(.medium)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(4)
+                            .minimumScaleFactor(0.6)
+
+                        Spacer()
+
+                        Text(book.author)
+                            .font(.system(size: geo.size.height * 0.055, design: .serif))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(1)
+                            .opacity(0.85)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, geo.size.width * 0.1)
+                    .padding(.vertical, geo.size.height * 0.08)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
             }
-            // Decoration, not information: the card announces the title itself. Left
-            // visible to VoiceOver, this reads out as "Bookmark" — the SF Symbol's own
-            // name — on every cover that lacks artwork.
+            // The card announces title and author itself; repeating them here would make
+            // VoiceOver read every book twice.
             .accessibilityHidden(true)
         }
     }
