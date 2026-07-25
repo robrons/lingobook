@@ -57,7 +57,13 @@ class EPUBService {
         // Extract EPUB
         let extractDir = tempDir.appendingPathComponent("extracted")
         try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
-        try FileManager.default.unzipItem(at: epubFile, to: extractDir)
+        // An EPUB is a zip. If it won't unzip, it isn't one — and ZIPFoundation's own
+        // errors ("Invalid CRC32 checksum") mean nothing to someone opening a book.
+        do {
+            try FileManager.default.unzipItem(at: epubFile, to: extractDir)
+        } catch {
+            throw EPUBError.invalidContainer
+        }
         
         // Parse container.xml to find OPF file
         let containerPath = extractDir.appendingPathComponent("META-INF/container.xml")
@@ -65,7 +71,10 @@ class EPUBService {
         
         // Parse OPF file
         let (metadata, manifest, spine) = try parseOPF(at: opfPath)
-        
+
+        // An empty spine means the OPF parsed but told us nothing about reading order.
+        guard !spine.isEmpty else { throw EPUBError.invalidOPF }
+
         // Get the base directory for content files
         let contentBaseURL = opfPath.deletingLastPathComponent()
         
@@ -91,9 +100,13 @@ class EPUBService {
             }
         }
         
+        // Every spine entry failed to resolve to a file we could read. Previously this
+        // returned an empty book and the reader just showed a blank page forever.
+        guard !chapters.isEmpty else { throw EPUBError.noContent }
+
         // Parse TOC (NCX or NAV)
         let toc = parseTOC(manifest: manifest, baseURL: contentBaseURL)
-        
+
         return EPUBContent(
             title: metadata["title"] ?? "Unknown Title",
             author: metadata["creator"] ?? "Unknown Author",
@@ -106,7 +119,11 @@ class EPUBService {
     // MARK: - Private Methods
     
     private func parseContainer(at url: URL, baseURL: URL) throws -> URL {
-        let data = try Data(contentsOf: url)
+        // A missing META-INF/container.xml is an invalid container, not a file-system
+        // mishap — report it as the former.
+        guard let data = try? Data(contentsOf: url) else {
+            throw EPUBError.invalidContainer
+        }
         let parser = ContainerXMLParser(data: data)
         guard let rootfile = parser.parse() else {
             throw EPUBError.invalidContainer
@@ -115,7 +132,9 @@ class EPUBService {
     }
     
     private func parseOPF(at url: URL) throws -> (metadata: [String: String], manifest: [String: [String: String]], spine: [String]) {
-        let data = try Data(contentsOf: url)
+        guard let data = try? Data(contentsOf: url) else {
+            throw EPUBError.invalidOPF
+        }
         let parser = OPFParser(data: data)
         return parser.parse()
     }
@@ -176,8 +195,21 @@ class EPUBService {
     
     // MARK: - Text Extraction
     
-    /// Extract plain text from HTML content, grouped by paragraphs
+    /// Extract plain text from HTML content, grouped by paragraphs, in document order.
     func extractParagraphs(from html: String) -> [String] {
+        if let blocks = XHTMLTextParser(html: html).parse(), !blocks.isEmpty {
+            return blocks
+                .map { $0.strippingLeadingDashes() }
+                .filter { !$0.isEmpty }
+        }
+        return legacyExtractParagraphs(from: html)
+    }
+
+    /// Fallback for documents XHTMLTextParser can't parse (malformed markup, unclosed tags).
+    ///
+    /// Matches block tags one type at a time, so it can reorder text and double-count
+    /// nested blocks — but a flawed page beats a blank one when the markup is broken.
+    private func legacyExtractParagraphs(from html: String) -> [String] {
         var paragraphs: [String] = []
         
         // Remove script and style content
@@ -205,8 +237,9 @@ class EPUBService {
                             .replacingOccurrences(of: "&quot;", with: "\"")
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                         
-                        if !content.isEmpty {
-                            paragraphs.append(content)
+                        let stripped = content.strippingLeadingDashes()
+                        if !stripped.isEmpty {
+                            paragraphs.append(stripped)
                         }
                     }
                 }
@@ -218,7 +251,7 @@ class EPUBService {
             let plainText = cleanHTML
                 .replacingOccurrences(of: "<[^>]+>", with: "\n", options: .regularExpression)
                 .components(separatedBy: "\n")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .map { $0.strippingLeadingDashes() }
                 .filter { !$0.isEmpty }
             paragraphs = plainText
         }
@@ -238,12 +271,16 @@ enum EPUBError: Error, LocalizedError {
     case invalidContainer
     case invalidOPF
     case noContent
-    
+
+    /// Written for whoever is holding the book, not whoever wrote the parser.
     var errorDescription: String? {
         switch self {
-        case .invalidContainer: return "Invalid EPUB container"
-        case .invalidOPF: return "Invalid OPF package file"
-        case .noContent: return "No readable content found"
+        case .invalidContainer:
+            return "This file doesn't look like an EPUB. Its container is missing or unreadable."
+        case .invalidOPF:
+            return "This EPUB's package file is damaged, so its list of chapters couldn't be read."
+        case .noContent:
+            return "This EPUB doesn't contain any readable chapters."
         }
     }
 }
@@ -405,5 +442,18 @@ class NCXParser: NSObject, XMLParserDelegate {
         default:
             break
         }
+    }
+}
+
+// MARK: - Extensions
+
+extension String {
+    /// Removes leading dashes, hyphens, and whitespace commonly found in dialogues
+    func strippingLeadingDashes() -> String {
+        var str = self.trimmingCharacters(in: .whitespacesAndNewlines)
+        while let first = str.first, ("-—–_".contains(first) || first.isWhitespace) {
+            str.removeFirst()
+        }
+        return str
     }
 }

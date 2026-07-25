@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Xcode build output
+build/
+build_output/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+xcodebuild_log.txt

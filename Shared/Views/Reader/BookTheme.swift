@@ -1,65 +1,51 @@
 import SwiftUI
 
-/// Theme options for the book reader (Apple Books inspired)
+/// Theme options for the book reader.
+///
+/// Preview colours are derived from the real page/text colours rather than hand-picked,
+/// so a swatch can never drift from the page it promises.
 enum BookTheme: String, CaseIterable {
-    case original, quiet, paper, bold, calm, focus
-    
+    case paper, calm, sepia, gray, night
+
     var name: String {
         rawValue.capitalized
     }
-    
+
     // Background color for reading
     var pageColor: Color {
         switch self {
-        case .original: return .white
-        case .quiet: return Color(red: 0.29, green: 0.29, blue: 0.30)
-        case .paper: return Color(red: 0.91, green: 0.89, blue: 0.85)
-        case .bold: return .white
+        case .paper: return .white
         case .calm: return Color(red: 0.976, green: 0.949, blue: 0.898)
-        case .focus: return .white
+        case .sepia: return Color(red: 0.94, green: 0.89, blue: 0.78)
+        case .gray: return Color(red: 0.165, green: 0.165, blue: 0.18)
+        case .night: return .black
         }
     }
-    
+
     // Text color when reading
     var textColor: Color {
         switch self {
-        case .original: return .black
-        case .quiet: return .white
-        case .paper: return Color(red: 0.2, green: 0.2, blue: 0.2)
-        case .bold: return .black
+        case .paper: return Color(red: 0.1, green: 0.1, blue: 0.1)
         case .calm: return Color(red: 0.25, green: 0.2, blue: 0.15)
-        case .focus: return .black
+        case .sepia: return Color(red: 0.30, green: 0.22, blue: 0.12)
+        case .gray: return Color(red: 0.784, green: 0.784, blue: 0.8)
+        case .night: return .white
         }
     }
-    
-    // Preview button background color
-    var previewBgColor: Color {
-        switch self {
-        case .original: return .white
-        case .quiet: return Color(red: 0.29, green: 0.29, blue: 0.30)
-        case .paper: return Color(red: 0.87, green: 0.85, blue: 0.82)
-        case .bold: return .white
-        case .calm: return Color(red: 0.976, green: 0.937, blue: 0.867)
-        case .focus: return .white
-        }
-    }
-    
-    // Preview button text color
-    var previewTextColor: Color {
-        switch self {
-        case .original: return .black
-        case .quiet: return .white
-        case .paper: return .black
-        case .bold: return .black
-        case .calm: return .black
-        case .focus: return .black
-        }
-    }
-    
+
+    // Preview swatch colors — taken straight from the theme so they can't disagree with it.
+    var previewBgColor: Color { pageColor }
+    var previewTextColor: Color { textColor }
+
     var colorScheme: ColorScheme? {
         switch self {
-        case .original, .paper, .bold, .calm, .focus: return .light
-        case .quiet: return .dark
+        case .paper, .calm, .sepia: return .light
+        case .gray, .night: return .dark
         }
+    }
+
+    /// True for themes whose page is dark, when a caller needs to pick a matching material.
+    var isDark: Bool {
+        colorScheme == .dark
     }
 }

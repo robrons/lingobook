@@ -16,8 +16,6 @@ class TranslationService {
     var progress: Double = 0
     var results: [TranslationResult] = []
     
-    /// Default source language (French)
-    static let defaultSourceLanguage = Locale.Language(identifier: "fr")
     /// Default target language (English)
     static let defaultTargetLanguage = Locale.Language(identifier: "en")
     
@@ -28,7 +26,7 @@ class TranslationService {
     /// Request translation of texts
     func requestTranslation(
         texts: [String],
-        from source: Locale.Language = defaultSourceLanguage,
+        from source: Locale.Language? = nil,
         to target: Locale.Language = defaultTargetLanguage
     ) {
         pendingTexts = texts
@@ -86,17 +84,24 @@ class TranslationService {
     
     /// Process translation with session (called from .translationTask)
     func performTranslation(using session: TranslationSession) async {
-        guard !pendingTexts.isEmpty else {
+        // Snapshot the request this session is answering. By the time the responses
+        // arrive, a page flip may have replaced `pendingTexts` — and matching old
+        // responses against the new texts by index is exactly how page N's English
+        // once rendered under page N+1's French.
+        let requested = pendingTexts
+        guard !requested.isEmpty else {
             isTranslating = false
             return
         }
-        
+
+        Self.debugLog("[translate] start texts=\(requested.count)")
+
         do {
             // Prepare all translation requests
             var allRequests: [TranslationSession.Request] = []
             var requestMap: [(textIndex: Int, chunkIndex: Int)] = []
-            
-            for (textIndex, text) in pendingTexts.enumerated() {
+
+            for (textIndex, text) in requested.enumerated() {
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     let chunks = splitIntoChunks(text)
                     for (chunkIndex, chunk) in chunks.enumerated() {
@@ -120,9 +125,17 @@ class TranslationService {
                 }
             }
             
+            // A newer request replaced this one while the responses were in flight.
+            // Its own session is already running; committing here would clobber it —
+            // or worse, alias these translations onto its texts.
+            guard requested == pendingTexts else {
+                Self.debugLog("[translate] discarded stale results=\(requested.count)")
+                return
+            }
+
             // Assemble results
             var translatedResults: [TranslationResult] = []
-            for (index, text) in pendingTexts.enumerated() {
+            for (index, text) in requested.enumerated() {
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     translatedResults.append(TranslationResult(original: text, translated: ""))
                 } else if let chunks = responseMap[index] {
@@ -134,22 +147,50 @@ class TranslationService {
                 } else {
                     translatedResults.append(TranslationResult(original: text, translated: ""))
                 }
-                progress = Double(index + 1) / Double(pendingTexts.count)
+                progress = Double(index + 1) / Double(requested.count)
             }
-            
+
             results = translatedResults
             pendingTexts = []
             isTranslating = false
-            
+            Self.debugLog("[translate] done results=\(translatedResults.count)")
+
+        } catch is CancellationError {
+            // A page flip invalidated this session because a newer request replaced it.
+            // Nothing failed — the new session is already running — so don't leave an
+            // "error" behind for the reader to see.
+            isTranslating = false
+            Self.debugLog("[translate] cancelled (superseded)")
         } catch {
             self.error = error.localizedDescription
             isTranslating = false
+            Self.debugLog("[translate] error: \(error.localizedDescription)")
         }
     }
+
+    #if DEBUG
+    /// Same flushed-per-line container log the paginator writes to — `print` is
+    /// block-buffered when stdout is a file, and buffered telemetry is no telemetry.
+    private static func debugLog(_ message: String) {
+        print(message)
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Documents/pagination-debug.log")
+        guard let data = (message + "\n").data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
+    }
+    #else
+    private static func debugLog(_ message: String) {}
+    #endif
     
     /// Get translated texts as array
     var translatedTexts: [String] {
-        results.map { $0.translated }
+        results.map { $0.translated.strippingLeadingDashes() }
     }
     
     /// Reset state

@@ -3,17 +3,8 @@ import SwiftData
 
 @main
 struct LingoBookMacApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Book.self])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-    
+    var sharedModelContainer: ModelContainer = ModelContainerFactory.makeContainer()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -22,5 +13,10 @@ struct LingoBookMacApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .defaultSize(width: 1200, height: 800)
+
+        // Gets ⌘, and a place in the app menu for free.
+        Settings {
+            SettingsView()
+        }
     }
 }

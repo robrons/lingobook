@@ -6,27 +6,106 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
-/// Library view showing user's book collection
+/// How the shelf is ordered. Persisted, because a sort you have to re-pick every launch
+/// isn't really a preference.
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case recentlyAdded = "Recently Added"
+    case recentlyRead = "Recently Read"
+    case title = "Title"
+    case author = "Author"
+
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .recentlyAdded: return "clock.badge.plus"
+        case .recentlyRead: return "book"
+        case .title: return "textformat"
+        case .author: return "person"
+        }
+    }
+}
+
+/// The library: books, and nothing else.
+///
+/// The old version opened on a logo, a tagline, and a permanent dashed drop target —
+/// three things you'd read once. Books app opens on books, so this does too. Importing
+/// moved to the toolbar (⌘O) and drag-and-drop, which only shows itself when you drag.
 struct LibraryView: View {
     @Binding var navigationPath: NavigationPath
-    
+
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Book.dateAdded, order: .reverse) private var books: [Book]
-    
+
+    @AppStorage("librarySort") private var sortRaw = LibrarySort.recentlyAdded.rawValue
+
+    @State private var searchText = ""
     @State private var isDragging = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showError = false
-    
+    /// Title of a book the reader tried to import twice. Not an error — just a nudge.
+    @State private var duplicateTitle: String?
+
     #if os(iOS)
     @State private var showFilePicker = false
+    @State private var showSettings = false
     #endif
-    
+
     private let epubService = EPUBService()
-    
+
+    private var sort: LibrarySort {
+        LibrarySort(rawValue: sortRaw) ?? .recentlyAdded
+    }
+
+    // MARK: - Derived collections
+
+    /// Search matches title or author. `localizedStandardContains` is what makes
+    /// "monte cristo" find "Le Comte de Monte-Cristo" — it ignores case and accents,
+    /// which matters when the whole shelf is French.
+    private var visibleBooks: [Book] {
+        let matched = searchText.isEmpty ? books : books.filter {
+            $0.title.localizedStandardContains(searchText)
+                || $0.author.localizedStandardContains(searchText)
+        }
+
+        switch sort {
+        case .recentlyAdded:
+            return matched.sorted { $0.dateAdded > $1.dateAdded }
+        case .recentlyRead:
+            return matched.sorted {
+                ($0.lastReadDate ?? .distantPast) > ($1.lastReadDate ?? .distantPast)
+            }
+        case .title:
+            return matched.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .author:
+            return matched.sorted { $0.author.localizedStandardCompare($1.author) == .orderedAscending }
+        }
+    }
+
+    /// Hidden while searching: a shelf of recents alongside search results would just be
+    /// two answers to one question.
+    private var continueReading: [Book] {
+        guard searchText.isEmpty else { return [] }
+
+        let recents = books
+            .filter { $0.lastReadDate != nil }
+            .sorted { ($0.lastReadDate ?? .distantPast) > ($1.lastReadDate ?? .distantPast) }
+            .prefix(3)
+            .map { $0 }
+
+        // A shortcut to your recent books is only a shortcut if it saves you a look
+        // further down. On a small shelf it just prints the same covers twice on one
+        // screen, which reads as a bug rather than a convenience.
+        guard recents.count < books.count else { return [] }
+
+        return recents
+    }
+
+    // MARK: - Body
+
     var body: some View {
         ZStack {
-            // Background
             #if os(iOS)
             Color(uiColor: .systemGroupedBackground)
                 .ignoresSafeArea()
@@ -34,29 +113,44 @@ struct LibraryView: View {
             VisualEffectBackground()
                 .ignoresSafeArea()
             #endif
-            
-            ScrollView {
-                VStack(spacing: 32) {
-                    headerSection
-                    uploadSection
-                    librarySection
-                }
-                .padding(32)
+
+            if books.isEmpty {
+                emptyLibrary
+            } else if visibleBooks.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                shelf
             }
         }
+        .navigationTitle("Library")
+        .searchable(text: $searchText, prompt: "Search by title or author")
+        .toolbar { toolbarContent }
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { providers in
             handleDrop(providers: providers)
         }
+        .overlay {
+            if isDragging { dropTarget }
+        }
         #endif
         #if os(iOS)
         .fileImporter(
             isPresented: $showFilePicker,
-            allowedContentTypes: [UTType(filenameExtension: "epub")!],
+            allowedContentTypes: [.epub],
             allowsMultipleSelection: false
         ) { result in
             handleFileImport(result: result)
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showSettings = false }
+                        }
+                    }
+            }
         }
         #endif
         .alert("Error", isPresented: $showError) {
@@ -64,149 +158,155 @@ struct LibraryView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred")
         }
+        .alert(
+            "Already in Your Library",
+            isPresented: Binding(get: { duplicateTitle != nil }, set: { if !$0 { duplicateTitle = nil } })
+        ) {
+            Button("OK") { duplicateTitle = nil }
+        } message: {
+            Text("“\(duplicateTitle ?? "")” is already on your shelf, so it wasn't imported again.")
+        }
         .overlay {
-            if isLoading {
-                loadingOverlay
-            }
+            if isLoading { loadingOverlay }
         }
     }
-    
-    // MARK: - Header
-    
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "books.vertical.fill")
-                .font(.system(size: 50))
-                .foregroundStyle(.orange)
-            
-            Text("LingoBook")
-                .font(.system(size: 42, weight: .bold, design: .serif))
-            
-            Text("Read your favorite books with AI-powered bilingual support")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
-        }
-        .padding(.top, 20)
-    }
-    
-    // MARK: - Upload Section
-    
-    private var uploadSection: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(
-                    isDragging ? Color.orange : Color.secondary.opacity(0.3),
-                    style: StrokeStyle(lineWidth: 2, dash: [10])
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(isDragging ? Color.orange.opacity(0.1) : Color.secondary.opacity(0.05))
-                )
-                .animation(.easeInOut(duration: 0.2), value: isDragging)
-            
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(isDragging ? Color.orange.opacity(0.2) : Color.secondary.opacity(0.1))
-                        .frame(width: 60, height: 60)
-                    
-                    Image(systemName: "arrow.down.doc.fill")
-                        .font(.title)
-                        .foregroundStyle(isDragging ? .orange : .secondary)
-                }
-                
-                VStack(spacing: 4) {
-                    #if os(iOS)
-                    Text("Tap to import EPUB files")
-                        .font(.headline)
-                        .foregroundStyle(isDragging ? .orange : .primary)
-                    #else
-                    Text("Drop EPUB files here or click to browse")
-                        .font(.headline)
-                        .foregroundStyle(isDragging ? .orange : .primary)
-                    #endif
-                    
-                    Text("EPUB files only")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(32)
-        }
-        .frame(height: 160)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            #if os(iOS)
-            showFilePicker = true
-            #else
-            openFilePicker()
-            #endif
-        }
-    }
-    
-    // MARK: - Library Section
-    
-    private var librarySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "books.vertical.fill")
-                    .foregroundStyle(.secondary)
-                Text(books.isEmpty ? "Library Empty" : "Library (\(books.count))")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            if books.isEmpty {
-                emptyLibraryPlaceholder
-            } else {
-                bookGrid
-            }
-        }
-    }
-    
-    private var emptyLibraryPlaceholder: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 20) {
-            ForEach(0..<4, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.1))
-                    .aspectRatio(2/3, contentMode: .fit)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 3)
-                            .frame(width: 50, height: 50)
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Picker("Sort By", selection: $sortRaw) {
+                    ForEach(LibrarySort.allCases) { option in
+                        Label(option.rawValue, systemImage: option.systemImage)
+                            .tag(option.rawValue)
                     }
+                }
+            } label: {
+                Label("Sort", systemImage: "arrow.up.arrow.down")
+            }
+            .help("Sort your library")
+        }
+
+        #if os(iOS)
+        ToolbarItem(placement: .primaryAction) {
+            Button { showSettings = true } label: {
+                Label("Settings", systemImage: "gearshape")
             }
         }
-        .opacity(0.5)
+        #endif
+
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: startImport) {
+                Label("Import EPUB", systemImage: "plus")
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            .help("Import an EPUB (⌘O)")
+        }
     }
-    
-    private var bookGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 20) {
-            ForEach(books) { book in
-                BookCard(book: book)
-                    .onTapGesture {
-                        navigationPath.append(book)
-                    }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            withAnimation {
-                                modelContext.delete(book)
+
+    // MARK: - Shelf
+
+    private var shelf: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                if !continueReading.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader("Continue Reading")
+
+                        HStack(alignment: .top, spacing: 20) {
+                            ForEach(continueReading) { book in
+                                Button { navigationPath.append(book) } label: {
+                                    ContinueReadingCard(book: book)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("Opens the book")
+                                .contextMenu { deleteButton(for: book) }
                             }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                            Spacer(minLength: 0)
                         }
                     }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if !continueReading.isEmpty {
+                        sectionHeader("All Books")
+                    }
+                    bookGrid
+                }
+            }
+            .padding(28)
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+    }
+
+    private var bookGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 20)], spacing: 24) {
+            ForEach(visibleBooks) { book in
+                Button { navigationPath.append(book) } label: {
+                    BookCard(book: book)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the book")
+                .contextMenu { deleteButton(for: book) }
             }
         }
     }
-    
+
+    private func deleteButton(for book: Book) -> some View {
+        Button(role: .destructive) {
+            withAnimation { modelContext.delete(book) }
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    private var emptyLibrary: some View {
+        ContentUnavailableView {
+            Label("No Books Yet", systemImage: "books.vertical")
+        } description: {
+            Text("Import an EPUB to get started.")
+        } actions: {
+            Button("Import EPUB", action: startImport)
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    #if os(macOS)
+    /// Only appears mid-drag. The rest of the time the shelf speaks for itself.
+    private var dropTarget: some View {
+        ZStack {
+            Color.black.opacity(0.25)
+                .ignoresSafeArea()
+
+            RoundedRectangle(cornerRadius: 20)
+                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [10]))
+                .padding(16)
+
+            VStack(spacing: 10) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(Color.accentColor)
+                Text("Drop to import")
+                    .font(.title3.weight(.medium))
+            }
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.15), value: isDragging)
+        .allowsHitTesting(false)
+    }
+    #endif
+
     private var loadingOverlay: some View {
         ZStack {
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 16) {
                 ProgressView()
                     .scaleEffect(1.5)
@@ -217,24 +317,32 @@ struct LibraryView: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         }
     }
-    
+
     // MARK: - Actions
-    
+
+    private func startImport() {
+        #if os(iOS)
+        showFilePicker = true
+        #else
+        openFilePicker()
+        #endif
+    }
+
     #if os(macOS)
     private func openFilePicker() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "epub")!]
+        panel.allowedContentTypes = [.epub]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             Task { await loadBook(from: url) }
         }
     }
-    
+
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
-        
+
         provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
             if let data = item as? Data,
                let url = URL(dataRepresentation: data, relativeTo: nil),
@@ -245,7 +353,7 @@ struct LibraryView: View {
         return true
     }
     #endif
-    
+
     #if os(iOS)
     private func handleFileImport(result: Result<[URL], Error>) {
         switch result {
@@ -267,27 +375,119 @@ struct LibraryView: View {
         }
     }
     #endif
-    
+
     private func loadBook(from url: URL) async {
         isLoading = true
         defer { isLoading = false }
-        
+
         do {
             let data = try Data(contentsOf: url)
             let content = try epubService.parse(epubData: data)
-            
+
+            // Re-importing a book you already have is a mistake, not a request for a second
+            // copy — and a duplicate would carry its own separate reading position.
+            if books.contains(where: { $0.matches(title: content.title, author: content.author) }) {
+                duplicateTitle = content.title
+                return
+            }
+
             let book = Book(
                 title: content.title,
                 author: content.author,
                 epubData: data,
                 coverData: content.coverData
             )
-            
+
             modelContext.insert(book)
             try modelContext.save()
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+        }
+    }
+}
+
+// MARK: - Continue Reading
+
+/// A book you're partway through, shown bigger than the shelf behind it.
+private struct ContinueReadingCard: View {
+    let book: Book
+
+    /// Taller than a grid cover, which sits at roughly 220pt for the 140pt-minimum
+    /// columns. The section is meant to read as the shelf's headline; at 180 it came out
+    /// *smaller* than the books below it and the emphasis landed backwards.
+    private let coverHeight: CGFloat = 260
+    private var coverWidth: CGFloat { coverHeight * 2 / 3 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BookCover(book: book)
+                .frame(width: coverWidth, height: coverHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(2)
+
+                Text(book.author)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                ProgressView(value: min(max(book.readingProgress, 0), 1))
+                    .progressViewStyle(.linear)
+                    .tint(.accentColor)
+                    .padding(.top, 2)
+
+                Text("\(book.progressPercent)%")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .frame(width: coverWidth, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(book.accessibilityDescription)
+    }
+}
+
+/// The cover art, or a stand-in when the EPUB didn't carry one.
+struct BookCover: View {
+    let book: Book
+
+    var body: some View {
+        if let coverImage = book.coverImage {
+            #if os(iOS)
+            Image(uiImage: coverImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+            #else
+            Image(nsImage: coverImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+            #endif
+        } else {
+            LinearGradient(
+                colors: [.orange, .orange.opacity(0.7)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .overlay {
+                Image(systemName: "book.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            // Decoration, not information: the card announces the title itself. Left
+            // visible to VoiceOver, this reads out as "Bookmark" — the SF Symbol's own
+            // name — on every cover that lacks artwork.
+            .accessibilityHidden(true)
         }
     }
 }
@@ -304,12 +504,14 @@ struct VisualEffectBackground: NSViewRepresentable {
         view.isEmphasized = true
         return view
     }
-    
+
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 #endif
 
 #Preview {
-    LibraryView(navigationPath: .constant(NavigationPath()))
-        .modelContainer(for: Book.self, inMemory: true)
+    NavigationStack {
+        LibraryView(navigationPath: .constant(NavigationPath()))
+    }
+    .modelContainer(for: Book.self, inMemory: true)
 }

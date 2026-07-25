@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		UIT003000 /* ReaderUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT002000 /* ReaderUXTests.swift */; };
 		2E54DCA12EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG001001 /* ZIPFoundation */; };
 		2E54DCA22EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG002001 /* ZIPFoundation */; };
 		AST001001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000 /* Assets.xcassets */; };
@@ -17,10 +18,24 @@
 		SH001002 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
 		SH002001 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
 		SH002002 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
+		SH021001 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
+		SH021002 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
 		SH003001 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
 		SH003002 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
 		SH004001 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
 		SH004002 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
+		SH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
+		SH004005 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
+		SH019001 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
+		SH019002 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
+		SH022001 /* TextMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH022000 /* TextMeasurement.swift */; };
+		SH025001 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH025000 /* SentenceSplitter.swift */; };
+		SH025002 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH025000 /* SentenceSplitter.swift */; };
+		SH022002 /* TextMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH022000 /* TextMeasurement.swift */; };
+		SH024001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH024000 /* SettingsView.swift */; };
+		SH024002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH024000 /* SettingsView.swift */; };
+		SH020001 /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH020000 /* ModelContainerFactory.swift */; };
+		SH020002 /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH020000 /* ModelContainerFactory.swift */; };
 		SH005001 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
 		SH005002 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
 		SH006001 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH006000 /* Clipboard.swift */; };
@@ -36,6 +51,8 @@
 		SH011001 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
 		SH011002 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
 		SH012001 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
+		SH026001 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH026000 /* JustifiedText.swift */; };
+		SH026002 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH026000 /* JustifiedText.swift */; };
 		SH012002 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
 		SH013001 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
 		SH013002 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
@@ -52,6 +69,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		UIT001000 /* LingoBookUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LingoBookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		UIT002000 /* ReaderUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderUXTests.swift; sourceTree = "<group>"; };
 		AST001000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		IOS001000 /* LingoBookiPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookiPadApp.swift; sourceTree = "<group>"; };
 		MAC001000 /* LingoBookMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookMacApp.swift; sourceTree = "<group>"; };
@@ -60,8 +79,15 @@
 		PRD002000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		SH001000 /* Book.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Book.swift; sourceTree = "<group>"; };
 		SH002000 /* EPUBService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EPUBService.swift; sourceTree = "<group>"; };
+		SH021000 /* XHTMLTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHTMLTextParser.swift; sourceTree = "<group>"; };
 		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		SH004000 /* SummarizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarizationService.swift; sourceTree = "<group>"; };
+		SH004004 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
+		SH019000 /* SpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionService.swift; sourceTree = "<group>"; };
+		SH022000 /* TextMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextMeasurement.swift; sourceTree = "<group>"; };
+		SH025000 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
+		SH024000 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		SH020000 /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		SH005000 /* PlatformImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformImage.swift; sourceTree = "<group>"; };
 		SH006000 /* Clipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Clipboard.swift; sourceTree = "<group>"; };
 		SH007000 /* ReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderViewModel.swift; sourceTree = "<group>"; };
@@ -70,6 +96,7 @@
 		SH010000 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		SH011000 /* BookTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTheme.swift; sourceTree = "<group>"; };
 		SH012000 /* PageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageView.swift; sourceTree = "<group>"; };
+		SH026000 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
 		SH013000 /* ReaderToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderToolbar.swift; sourceTree = "<group>"; };
 		SH014000 /* PageNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNavigator.swift; sourceTree = "<group>"; };
 		SH015000 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
@@ -95,6 +122,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FRM003000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -104,8 +138,17 @@
 				GRP001000 /* Shared */,
 				GRP002000 /* macOS */,
 				GRP003000 /* iOS */,
+				GRP005000 /* UITests */,
 				GRP004000 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		GRP005000 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				UIT002000 /* ReaderUXTests.swift */,
+			);
+			path = UITests;
 			sourceTree = "<group>";
 		};
 		GRP001000 /* Shared */ = {
@@ -133,8 +176,11 @@
 			isa = PBXGroup;
 			children = (
 				SH002000 /* EPUBService.swift */,
+				SH021000 /* XHTMLTextParser.swift */,
 				SH003000 /* TranslationService.swift */,
 				SH004000 /* SummarizationService.swift */,
+				SH004004 /* TTSService.swift */,
+				SH019000 /* SpeechRecognitionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -142,6 +188,9 @@
 		GRP001003 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				SH020000 /* ModelContainerFactory.swift */,
+				SH022000 /* TextMeasurement.swift */,
+				SH025000 /* SentenceSplitter.swift */,
 				SH005000 /* PlatformImage.swift */,
 				SH006000 /* Clipboard.swift */,
 			);
@@ -160,6 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				SH008000 /* ContentView.swift */,
+				SH024000 /* SettingsView.swift */,
 				GRP001006 /* Library */,
 				GRP001007 /* Reader */,
 			);
@@ -180,6 +230,7 @@
 			children = (
 				SH011000 /* BookTheme.swift */,
 				SH012000 /* PageView.swift */,
+				SH026000 /* JustifiedText.swift */,
 				SH013000 /* ReaderToolbar.swift */,
 				SH014000 /* PageNavigator.swift */,
 				SH015000 /* ThemeSettings.swift */,
@@ -212,6 +263,7 @@
 			children = (
 				PRD001000 /* LingoBook.app */,
 				PRD002000 /* LingoBook.app */,
+				UIT001000 /* LingoBookUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -259,7 +311,42 @@
 			productReference = PRD002000 /* LingoBook.app */;
 			productType = "com.apple.product-type.application";
 		};
+		TGT003000 /* LingoBookUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG003000 /* Build configuration list for PBXNativeTarget "LingoBookUITests" */;
+			buildPhases = (
+				SRC003000 /* Sources */,
+				FRM003000 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DEP003000 /* PBXTargetDependency */,
+			);
+			name = LingoBookUITests;
+			productName = LingoBookUITests;
+			productReference = UIT001000 /* LingoBookUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		CTR003000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = PRJ000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = TGT002000;
+			remoteInfo = "LingoBook (iPadOS)";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		DEP003000 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = TGT002000 /* LingoBook (iPadOS) */;
+			targetProxy = CTR003000 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		PRJ000000 /* Project object */ = {
@@ -274,6 +361,10 @@
 					};
 					TGT002000 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					TGT003000 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = TGT002000;
 					};
 				};
 			};
@@ -295,6 +386,7 @@
 			targets = (
 				TGT001000 /* LingoBook (macOS) */,
 				TGT002000 /* LingoBook (iPadOS) */,
+				TGT003000 /* LingoBookUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -326,8 +418,15 @@
 				MAC001001 /* LingoBookMacApp.swift in Sources */,
 				SH001001 /* Book.swift in Sources */,
 				SH002001 /* EPUBService.swift in Sources */,
+				SH021001 /* XHTMLTextParser.swift in Sources */,
 				SH003001 /* TranslationService.swift in Sources */,
 				SH004001 /* SummarizationService.swift in Sources */,
+				SH004003 /* TTSService.swift in Sources */,
+				SH019001 /* SpeechRecognitionService.swift in Sources */,
+				SH020001 /* ModelContainerFactory.swift in Sources */,
+				SH022001 /* TextMeasurement.swift in Sources */,
+				SH025001 /* SentenceSplitter.swift in Sources */,
+				SH024001 /* SettingsView.swift in Sources */,
 				SH005001 /* PlatformImage.swift in Sources */,
 				SH006001 /* Clipboard.swift in Sources */,
 				SH007001 /* ReaderViewModel.swift in Sources */,
@@ -336,6 +435,7 @@
 				SH010001 /* LibraryView.swift in Sources */,
 				SH011001 /* BookTheme.swift in Sources */,
 				SH012001 /* PageView.swift in Sources */,
+				SH026001 /* JustifiedText.swift in Sources */,
 				SH013001 /* ReaderToolbar.swift in Sources */,
 				SH014001 /* PageNavigator.swift in Sources */,
 				SH015001 /* ThemeSettings.swift in Sources */,
@@ -352,8 +452,15 @@
 				IOS001001 /* LingoBookiPadApp.swift in Sources */,
 				SH001002 /* Book.swift in Sources */,
 				SH002002 /* EPUBService.swift in Sources */,
+				SH021002 /* XHTMLTextParser.swift in Sources */,
 				SH003002 /* TranslationService.swift in Sources */,
 				SH004002 /* SummarizationService.swift in Sources */,
+				SH004005 /* TTSService.swift in Sources */,
+				SH019002 /* SpeechRecognitionService.swift in Sources */,
+				SH020002 /* ModelContainerFactory.swift in Sources */,
+				SH022002 /* TextMeasurement.swift in Sources */,
+				SH025002 /* SentenceSplitter.swift in Sources */,
+				SH024002 /* SettingsView.swift in Sources */,
 				SH005002 /* PlatformImage.swift in Sources */,
 				SH006002 /* Clipboard.swift in Sources */,
 				SH007002 /* ReaderViewModel.swift in Sources */,
@@ -362,12 +469,21 @@
 				SH010002 /* LibraryView.swift in Sources */,
 				SH011002 /* BookTheme.swift in Sources */,
 				SH012002 /* PageView.swift in Sources */,
+				SH026002 /* JustifiedText.swift in Sources */,
 				SH013002 /* ReaderToolbar.swift in Sources */,
 				SH014002 /* PageNavigator.swift in Sources */,
 				SH015002 /* ThemeSettings.swift in Sources */,
 				SH016002 /* ReaderView.swift in Sources */,
 				SH017002 /* TOCSheet.swift in Sources */,
 				SH018002 /* SummarySheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		SRC003000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				UIT003000 /* ReaderUXTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,11 +575,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = YY96UL254B;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required for voice navigation.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is required to listen for voice commands.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -486,11 +604,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = YY96UL254B;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required for voice navigation.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is required to listen for voice commands.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -513,9 +633,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YY96UL254B;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -530,7 +652,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -542,9 +664,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YY96UL254B;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -559,8 +683,60 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		CFG003001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "LingoBook (iPadOS)";
+			};
+			name = Debug;
+		};
+		CFG003002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "LingoBook (iPadOS)";
 			};
 			name = Release;
 		};
@@ -590,6 +766,15 @@
 			buildConfigurations = (
 				CFG002001 /* Debug */,
 				CFG002002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG003000 /* Build configuration list for PBXNativeTarget "LingoBookUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG003001 /* Debug */,
+				CFG003002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
