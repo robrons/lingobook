@@ -10,17 +10,24 @@ struct TutorContext: Sendable {
     let bookTitle: String
     let chapterTitle: String
     let pageText: String
+    /// Identifies which page this is, so a turned page can be noticed mid-conversation.
+    let pageID: String
 }
 
 struct TutorMessage: Identifiable, Sendable, Equatable {
     enum Role: Sendable {
         case reader
         case tutor
+        /// A divider in the transcript — "turned to a new page" — not a turn.
+        case note
     }
 
     let id: UUID
     let role: Role
     var text: String
+
+    /// Markers shown in the transcript but never sent to the model.
+    var isNote: Bool { role == .note }
 
     init(id: UUID = UUID(), role: Role, text: String) {
         self.id = id
@@ -143,10 +150,29 @@ struct OllamaTutor: TutorService {
 
         If you are not certain, say so plainly instead of guessing.
 
-        The page reads:
+        Earlier questions in this conversation may have been about a different page. \
+        The page quoted alongside the reader's latest question is the one in front of \
+        them now — answer about that one.
+        """
+    }
+
+    /// The reader's question with the page attached to it.
+    ///
+    /// The page used to live in the system prompt, which sits above the entire
+    /// conversation — so after a few exchanges a freshly turned page was buried under
+    /// history about the previous one, and the model kept answering about whatever had
+    /// been discussed most. Recency wins, so the page travels with the question.
+    ///
+    /// Only the newest turn carries it. Repeating the page on every historical turn
+    /// would trade the bug for a context window full of duplicated text.
+    private func questionWithPage(_ question: String, context: TutorContext) -> String {
+        """
+        The page in front of me right now, from “\(context.chapterTitle)”:
         \"\"\"
         \(context.pageText)
         \"\"\"
+
+        \(question)
         """
     }
 
@@ -163,10 +189,17 @@ struct OllamaTutor: TutorService {
                     var wire: [WireMessage] = [
                         WireMessage(role: "system", content: systemPrompt(for: context, question: question))
                     ]
-                    wire += history.map {
-                        WireMessage(role: $0.role == .reader ? "user" : "assistant", content: $0.text)
-                    }
-                    wire.append(WireMessage(role: "user", content: question))
+                    wire += history
+                        .filter { !$0.isNote }
+                        .map {
+                            WireMessage(
+                                role: $0.role == .reader ? "user" : "assistant",
+                                content: $0.text
+                            )
+                        }
+                    wire.append(
+                        WireMessage(role: "user", content: questionWithPage(question, context: context))
+                    )
 
                     var request = URLRequest(url: endpoint)
                     request.httpMethod = "POST"

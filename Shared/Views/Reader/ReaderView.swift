@@ -39,7 +39,8 @@ struct ReaderView: View {
                     context: TutorContext(
                         bookTitle: book.title,
                         chapterTitle: viewModel.currentChapterTitle,
-                        pageText: viewModel.currentPageContent.joined(separator: "\n\n")
+                        pageText: viewModel.currentPageContent.joined(separator: "\n\n"),
+                        pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)"
                     ),
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } }
                 )

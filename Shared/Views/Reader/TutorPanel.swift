@@ -21,6 +21,9 @@ final class TutorPanelModel {
     /// the card somewhere useful survives closing and reopening it.
     var position: CGSize = .zero
 
+    /// The page the last question was asked about, so a page turn can be marked.
+    private var lastPageID: String?
+
     private let tutor: any TutorService
     private var streamTask: Task<Void, Never>?
 
@@ -40,6 +43,14 @@ final class TutorPanelModel {
         errorMessage = nil
         // History excludes the question being asked — the service appends it itself.
         let history = messages
+
+        // Say so in the transcript when the book has moved on since the last question,
+        // so an answer that leans on the earlier page is legible rather than baffling.
+        if let lastPageID, lastPageID != context.pageID, !messages.isEmpty {
+            messages.append(TutorMessage(role: .note, text: "Turned to a new page"))
+        }
+        lastPageID = context.pageID
+
         messages.append(TutorMessage(role: .reader, text: question))
 
         let reply = TutorMessage(role: .tutor, text: "")
@@ -263,7 +274,23 @@ struct TutorPanel: View {
         }
     }
 
+    @ViewBuilder
     private func bubble(for message: TutorMessage) -> some View {
+        if message.isNote {
+            HStack(spacing: 8) {
+                Rectangle().frame(height: 1).opacity(0.12)
+                Text(message.text)
+                    .font(.caption2)
+                    .fixedSize()
+                Rectangle().frame(height: 1).opacity(0.12)
+            }
+            .foregroundStyle(theme.textColor.opacity(0.45))
+        } else {
+            exchange(message)
+        }
+    }
+
+    private func exchange(_ message: TutorMessage) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(message.role == .reader ? "You" : "Tutor")
                 .font(.caption2.weight(.semibold))
