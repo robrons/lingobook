@@ -17,6 +17,8 @@ struct ReaderView: View {
     // asking a question must never be able to move the reader's place in the book.
     @State private var tutor = TutorPanelModel()
     @State private var showTutor = false
+    @State private var dictation = DictationService()
+    @State private var pushToTalkMonitor: Any?
     #endif
     
     #if os(macOS)
@@ -36,14 +38,19 @@ struct ReaderView: View {
                 TutorPanel(
                     model: tutor,
                     theme: viewModel.currentTheme,
-                    context: TutorContext(
-                        bookTitle: book.title,
-                        chapterTitle: viewModel.currentChapterTitle,
-                        pageText: viewModel.currentPageContent.joined(separator: "\n\n"),
-                        pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)"
-                    ),
-                    onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } }
+                    context: tutorContext,
+                    onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } },
+                    listeningStatus: dictationStatus,
+                    onSpeak: { viewModel.ttsService.speak($0) }
                 )
+                .onAppear {
+                    installPushToTalk()
+                    // Warm the speech model now rather than at the moment the key is
+                    // held: the first load downloads a few hundred megabytes, and
+                    // discovering that mid-sentence would lose the sentence.
+                    Task { await dictation.prepare() }
+                }
+                .onDisappear(perform: removePushToTalk)
                 // Height is the panel's own business — it collapses to a title bar
                 // when minimised.
                 .frame(width: 380)
@@ -53,6 +60,68 @@ struct ReaderView: View {
             #endif
         }
     }
+
+    #if os(macOS)
+
+    private var dictationStatus: String? {
+        switch dictation.state {
+        case .listening: "Listening — release space to send"
+        case .transcribing: "Transcribing…"
+        case .preparing: "Preparing the speech model…"
+        case .idle: nil
+        }
+    }
+
+    /// Hold-to-talk on the space bar.
+    ///
+    /// A local event monitor rather than SwiftUI's `onKeyPress`, because the panel
+    /// would have to hold keyboard focus for that — and focus belongs to the text
+    /// field, which needs the space bar for spaces. The monitor sees the key first and
+    /// steps aside whenever a text view is editing, so typing is never intercepted.
+    private func installPushToTalk() {
+        guard pushToTalkMonitor == nil else { return }
+
+        pushToTalkMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            let space = 49
+            guard event.keyCode == space, showTutor, !isEditingText else { return event }
+
+            if event.type == .keyDown {
+                // Held keys repeat; only the first press starts recording.
+                guard !event.isARepeat else { return nil }
+                dictation.startListening()
+            } else {
+                Task {
+                    let heard = await dictation.stopListeningAndTranscribe()
+                    guard !heard.isEmpty else { return }
+                    tutor.draft = heard
+                    tutor.send(context: tutorContext)
+                }
+            }
+            return nil
+        }
+    }
+
+    private func removePushToTalk() {
+        if let pushToTalkMonitor { NSEvent.removeMonitor(pushToTalkMonitor) }
+        pushToTalkMonitor = nil
+        dictation.cancel()
+    }
+
+    /// True while a text field has the keyboard, so space means "space".
+    private var isEditingText: Bool {
+        NSApp.keyWindow?.firstResponder is NSTextView
+    }
+
+    private var tutorContext: TutorContext {
+        TutorContext(
+            bookTitle: book.title,
+            chapterTitle: viewModel.currentChapterTitle,
+            pageText: viewModel.currentPageContent.joined(separator: "\n\n"),
+            pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)"
+        )
+    }
+
+    #endif
 
     /// Both are no-ops off the Mac, so the toolbar can pass them unconditionally.
     private var isTutorVisible: Bool {

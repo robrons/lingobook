@@ -96,6 +96,10 @@ struct TutorPanel: View {
     let theme: BookTheme
     let context: TutorContext
     let onClose: () -> Void
+    /// Non-nil while the reader is holding space to dictate.
+    var listeningStatus: String?
+    /// Speaks a reply aloud on demand — playback is never automatic.
+    var onSpeak: ((String) -> Void)?
 
     /// Live drag, discarded when the gesture ends — the committed value moves to
     /// `model.position` so it outlives the gesture.
@@ -248,6 +252,11 @@ struct TutorPanel: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(theme.textColor.opacity(0.4))
 
+            Text("Hold space to speak")
+                .font(.caption2)
+                .foregroundStyle(theme.textColor.opacity(0.35))
+                .padding(.top, 2)
+
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -312,6 +321,21 @@ struct TutorPanel: View {
                     .font(.callout)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
+
+                if let onSpeak, !model.isResponding || message.id != model.messages.last?.id {
+                    Button {
+                        onSpeak(Self.spoken(message.text))
+                    } label: {
+                        Label("Read aloud", systemImage: "speaker.wave.2")
+                            .labelStyle(.iconOnly)
+                            .font(.caption)
+                            .foregroundStyle(theme.textColor.opacity(0.45))
+                            .frame(width: 22, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Read this aloud")
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -335,7 +359,41 @@ struct TutorPanel: View {
 
     // MARK: - Composer
 
+    /// Markdown read aloud is a mess of "asterisk asterisk", so strip the markup and
+    /// speak the words. `AttributedString` already knows how to do this correctly.
+    private static func spoken(_ raw: String) -> String {
+        raw.components(separatedBy: .newlines).map { line -> String in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let attributed = try? AttributedString(
+                markdown: trimmed,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            ) else { return trimmed }
+            return String(attributed.characters)
+        }
+        .joined(separator: "\n")
+    }
+
     private var composer: some View {
+        VStack(spacing: 6) {
+            if let listeningStatus {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .symbolEffect(.variableColor.iterative, isActive: true)
+                    Text(listeningStatus)
+                    Spacer()
+                }
+                .font(.caption)
+                .foregroundStyle(theme.textColor.opacity(0.7))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            composerRow
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private var composerRow: some View {
         HStack(spacing: 8) {
             TextField("Ask about this page…", text: $model.draft, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -365,8 +423,6 @@ struct TutorPanel: View {
                 .accessibilityLabel("Ask")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
     }
 }
 

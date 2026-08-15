@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		UIT003000 /* ReaderUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UIT002000 /* ReaderUXTests.swift */; };
 		2E54DCA12EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG001001 /* ZIPFoundation */; };
+		PKG003002 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = PKG003001 /* FluidAudio */; };
 		2E54DCA22EE735FE00F63A61 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = PKG002001 /* ZIPFoundation */; };
 		AST001001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000 /* Assets.xcassets */; };
 		AST001002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000 /* Assets.xcassets */; };
@@ -24,6 +25,7 @@
 		SH003002 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
 		SH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
 		SH027001 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
+		SH029001 /* DictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH029000 /* DictationService.swift */; };
 		SH027002 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
 		SH028001 /* TutorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH028000 /* TutorPanel.swift */; };
 		SH028002 /* TutorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH028000 /* TutorPanel.swift */; };
@@ -83,6 +85,7 @@
 		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		SH004004 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
 		SH027000 /* TutorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorService.swift; sourceTree = "<group>"; };
+		SH029000 /* DictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationService.swift; sourceTree = "<group>"; };
 		SH028000 /* TutorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorPanel.swift; sourceTree = "<group>"; };
 		SH019000 /* SpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionService.swift; sourceTree = "<group>"; };
 		SH022000 /* TextMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextMeasurement.swift; sourceTree = "<group>"; };
@@ -111,6 +114,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2E54DCA12EE735FE00F63A61 /* ZIPFoundation in Frameworks */,
+				PKG003002 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,6 +184,7 @@
 				SH003000 /* TranslationService.swift */,
 				SH004004 /* TTSService.swift */,
 				SH027000 /* TutorService.swift */,
+				SH029000 /* DictationService.swift */,
 				SH019000 /* SpeechRecognitionService.swift */,
 			);
 			path = Services;
@@ -286,6 +291,7 @@
 			name = "LingoBook (macOS)";
 			packageProductDependencies = (
 				PKG001001 /* ZIPFoundation */,
+				PKG003001 /* FluidAudio */,
 			);
 			productName = LingoBook;
 			productReference = PRD001000 /* LingoBook.app */;
@@ -379,6 +385,7 @@
 			mainGroup = GRP000000;
 			packageReferences = (
 				PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				PKG003000 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			productRefGroup = GRP004000 /* Products */;
 			projectDirPath = "";
@@ -422,6 +429,7 @@
 				SH003001 /* TranslationService.swift in Sources */,
 				SH004003 /* TTSService.swift in Sources */,
 				SH027001 /* TutorService.swift in Sources */,
+				SH029001 /* DictationService.swift in Sources */,
 				SH028001 /* TutorPanel.swift in Sources */,
 				SH019001 /* SpeechRecognitionService.swift in Sources */,
 				SH020001 /* ModelContainerFactory.swift in Sources */,
@@ -790,6 +798,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		PKG003000 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.12.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -802,6 +818,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		PKG003001 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKG003000 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

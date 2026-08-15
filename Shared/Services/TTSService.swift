@@ -142,6 +142,26 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         playNext()
     }
 
+    /// Speaks one passage — a tutor reply — in whatever language it happens to be in.
+    ///
+    /// Shares the reader's synthesiser rather than owning a second one, so a reply can
+    /// never talk over the book being read aloud: starting either stops the other.
+    func speak(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        stop()
+        wasManuallyStopped = false
+        isPlaying = true
+        queue.removeAll()
+
+        let language = NLLanguageRecognizer.dominantLanguage(for: trimmed)?.rawValue ?? "en-US"
+        queue.append(Utterance(text: trimmed, language: language, pauseAfter: 0))
+
+        updateNowPlaying(rate: 1)
+        playNext()
+    }
+
     func stop() {
         wasManuallyStopped = true
         if synthesizer.isSpeaking {
