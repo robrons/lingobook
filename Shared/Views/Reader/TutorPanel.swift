@@ -21,6 +21,9 @@ final class TutorPanelModel {
     /// the card somewhere useful survives closing and reopening it.
     var position: CGSize = .zero
 
+    /// Which reply the reader asked to hear, so its button can offer to stop it.
+    var speakingMessageID: UUID?
+
     /// The page the last question was asked about, so a page turn can be marked.
     private var lastPageID: String?
 
@@ -100,6 +103,9 @@ struct TutorPanel: View {
     var listeningStatus: String?
     /// Speaks a reply aloud on demand — playback is never automatic.
     var onSpeak: ((String) -> Void)?
+    /// Whether anything is being spoken right now, so the button can offer to stop.
+    var isSpeaking: Bool = false
+    var onStopSpeaking: (() -> Void)?
     /// Offered while weights are being fetched, in case a copy already exists on disk.
     var onChooseModelFolder: (() -> Void)?
 
@@ -325,18 +331,29 @@ struct TutorPanel: View {
                     .textSelection(.enabled)
 
                 if let onSpeak, !model.isResponding || message.id != model.messages.last?.id {
+                    let speakingThis = isSpeaking && model.speakingMessageID == message.id
+
                     Button {
-                        onSpeak(Self.spoken(message.text))
+                        if speakingThis {
+                            onStopSpeaking?()
+                            model.speakingMessageID = nil
+                        } else {
+                            model.speakingMessageID = message.id
+                            onSpeak(Self.spoken(message.text))
+                        }
                     } label: {
-                        Label("Read aloud", systemImage: "speaker.wave.2")
-                            .labelStyle(.iconOnly)
-                            .font(.caption)
-                            .foregroundStyle(theme.textColor.opacity(0.45))
-                            .frame(width: 22, height: 18)
-                            .contentShape(Rectangle())
+                        Label(
+                            speakingThis ? "Stop" : "Read aloud",
+                            systemImage: speakingThis ? "stop.fill" : "speaker.wave.2"
+                        )
+                        .labelStyle(.iconOnly)
+                        .font(.caption)
+                        .foregroundStyle(speakingThis ? Color.accentColor : theme.textColor.opacity(0.45))
+                        .frame(width: 22, height: 18)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("Read this aloud")
+                    .help(speakingThis ? "Stop reading" : "Read this aloud")
                 }
             }
         }

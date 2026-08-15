@@ -33,6 +33,14 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
     private var wasManuallyStopped = false
     private var nowPlayingTitle = ""
 
+    /// Set while reading something that isn't the book — a tutor reply.
+    ///
+    /// `onFinishReading` is the book's page-turn hook: when the queue empties it moves
+    /// to the next page and carries on reading. A one-off aside must not trigger that,
+    /// or speaking a single answer quietly hands control to the auto-reader and the
+    /// book starts reading itself with no obvious way to stop.
+    private var isSpeakingAside = false
+
     struct Utterance {
         let text: String
         let language: String
@@ -152,6 +160,7 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
 
         stop()
         wasManuallyStopped = false
+        isSpeakingAside = true
         isPlaying = true
         queue.removeAll()
 
@@ -170,6 +179,7 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         queue.removeAll()
         isPlaying = false
         isPaused = false
+        isSpeakingAside = false
         clearNowPlaying()
     }
 
@@ -190,7 +200,9 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
     private func playNext() {
         guard !queue.isEmpty, isPlaying else {
             isPlaying = false
-            if !wasManuallyStopped {
+            let wasAside = isSpeakingAside
+            isSpeakingAside = false
+            if !wasManuallyStopped, !wasAside {
                 onFinishReading?()
             }
             return

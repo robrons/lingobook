@@ -42,6 +42,8 @@ struct ReaderView: View {
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } },
                     listeningStatus: dictationStatus,
                     onSpeak: { viewModel.ttsService.speak($0) },
+                    isSpeaking: viewModel.ttsService.isPlaying,
+                    onStopSpeaking: { viewModel.ttsService.stop() },
                     onChooseModelFolder: modelFolderPicker
                 )
                 .onAppear {
