@@ -67,7 +67,9 @@ struct ReaderView: View {
         switch dictation.state {
         case .listening: "Listening — release space to send"
         case .transcribing: "Transcribing…"
-        case .preparing: "Preparing the speech model…"
+        // The first run fetches a few hundred megabytes with no progress to report,
+        // which looks identical to a hang unless the wait is named.
+        case .preparing: "Fetching the speech model — one time, ~460 MB…"
         case .idle: nil
         }
     }
