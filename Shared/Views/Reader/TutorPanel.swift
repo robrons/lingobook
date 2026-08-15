@@ -169,11 +169,16 @@ struct TutorPanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        // The whole bar is the grab area, so there's a generous target that isn't a
-        // button. `contentShape` after the padding, or the gaps between controls
-        // wouldn't drag.
-        .contentShape(Rectangle())
-        .gesture(dragGesture)
+        // The grab area sits *behind* the controls rather than wrapping them. Wrapping
+        // meant the drag gesture and the buttons competed for the same click: hold
+        // perfectly still and the button won, twitch a pixel and the drag claimed it
+        // and swallowed the tap. Behind, a click on a button is simply a click on the
+        // button, and everything else falls through to the handle.
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(dragGesture)
+        )
     }
 
     private var dragGesture: some Gesture {
@@ -181,7 +186,9 @@ struct TutorPanel: View {
         // against a view that this very gesture is moving — each frame shifts the
         // origin the next event is measured from, so the card chases the cursor and
         // judders. Global coordinates don't move under it.
-        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+        // 6pt rather than 1: a click is never perfectly still, and at 1pt the hand
+        // tremor in an ordinary click registered as a drag.
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
             .updating($dragTranslation) { value, state, _ in
                 state = value.translation
             }
