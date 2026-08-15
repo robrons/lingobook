@@ -150,22 +150,15 @@ struct TutorPanel: View {
                     .foregroundStyle(theme.textColor.opacity(0.6))
             }
 
-            Button {
+            iconButton(
+                model.isMinimized ? "chevron.up" : "minus",
+                help: model.isMinimized ? "Expand" : "Minimise",
+                label: model.isMinimized ? "Expand tutor" : "Minimise tutor"
+            ) {
                 withAnimation(.easeOut(duration: 0.18)) { model.isMinimized.toggle() }
-            } label: {
-                Image(systemName: model.isMinimized ? "chevron.up" : "minus")
-                    .foregroundStyle(theme.textColor.opacity(0.6))
             }
-            .buttonStyle(.plain)
-            .help(model.isMinimized ? "Expand" : "Minimise")
-            .accessibilityLabel(model.isMinimized ? "Expand tutor" : "Minimise tutor")
 
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .foregroundStyle(theme.textColor.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close tutor")
+            iconButton("xmark", help: "Close", label: "Close tutor", action: onClose)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -179,6 +172,30 @@ struct TutorPanel: View {
                 .contentShape(Rectangle())
                 .gesture(dragGesture)
         )
+    }
+
+    /// A header button with a hit target the size of the button, not the size of the glyph.
+    ///
+    /// `.buttonStyle(.plain)` takes its clickable region from the rendered shape, which
+    /// for `minus` is a horizontal sliver two points tall — so clicks mostly sailed past
+    /// it into the drag handle behind, and minimise appeared broken while the fatter
+    /// `xmark` next to it worked fine. The explicit frame plus `contentShape` gives every
+    /// icon the same honest 22pt square to aim at.
+    private func iconButton(
+        _ symbol: String,
+        help: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .foregroundStyle(theme.textColor.opacity(0.6))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(label)
     }
 
     private var dragGesture: some Gesture {
