@@ -395,7 +395,11 @@ struct TutorPanel: View {
 
     private var composerRow: some View {
         HStack(spacing: 8) {
-            TextField("Ask about this page…", text: $model.draft, axis: .vertical)
+            TextField(
+                model.draft.isEmpty ? "Hold space to speak, or type…" : "Ask about this page…",
+                text: $model.draft,
+                axis: .vertical
+            )
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .font(.callout)

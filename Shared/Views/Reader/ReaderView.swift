@@ -83,7 +83,11 @@ struct ReaderView: View {
 
         pushToTalkMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
             let space = 49
-            guard event.keyCode == space, showTutor, !isEditingText else { return event }
+            // Space talks when there is nothing typed, and types a space once there
+            // is. Stepping aside for *any* focused text field — the first version —
+            // meant it never fired at all, because the composer normally holds focus.
+            let composerIsBusy = isEditingText && !tutor.draft.isEmpty
+            guard event.keyCode == space, showTutor, !composerIsBusy else { return event }
 
             if event.type == .keyDown {
                 // Held keys repeat; only the first press starts recording.

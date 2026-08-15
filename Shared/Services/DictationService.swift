@@ -32,7 +32,7 @@ final class DictationService {
 
     private let engine = AVAudioEngine()
     private let collected = SampleCollector()
-    private var asr: UnifiedAsrManager?
+    private var asr: AsrManager?
 
     /// Parakeet wants 16kHz mono; the microphone will not be offering that.
     private static let targetSampleRate = 16_000.0
@@ -44,12 +44,14 @@ final class DictationService {
         guard asr == nil else { return }
         state = .preparing
         do {
-            // The unified manager takes a plain sample array and hands back a string —
-            // the sliding-window managers exist for continuous dictation and want a
-            // decoder state threaded through calls, which a push-to-talk utterance
-            // has no use for.
-            let manager = UnifiedAsrManager()
-            try await manager.loadModels()
+            // Explicitly v3. `UnifiedAsrManager` has the friendlier API — plain samples
+            // in, string out, no decoder state — but its only weights are
+            // `parakeet-unified-en-0.6b`, which is English-only. Multilingual
+            // recognition is the entire reason for using Parakeet here, so this takes
+            // the wordier road for the model that can actually hear French.
+            let models = try await AsrModels.downloadAndLoad(version: .v3)
+            let manager = AsrManager(config: .default)
+            try await manager.loadModels(models)
             asr = manager
             state = .idle
         } catch {
@@ -118,8 +120,11 @@ final class DictationService {
         guard let asr else { return "" }
 
         do {
-            let heard = try await asr.transcribe(samples)
-            return heard.trimmingCharacters(in: .whitespacesAndNewlines)
+            // A fresh state per utterance: each push-to-talk press is its own sentence,
+            // not a continuation of the last one.
+            var decoderState = try TdtDecoderState()
+            let result = try await asr.transcribe(samples, decoderState: &decoderState)
+            return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             errorMessage = "Couldn't transcribe that: \(error.localizedDescription)"
             return ""
