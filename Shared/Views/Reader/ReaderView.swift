@@ -154,8 +154,49 @@ struct ReaderView: View {
             bookTitle: book.title,
             chapterTitle: viewModel.currentChapterTitle,
             pageText: viewModel.currentPageContent.joined(separator: "\n\n"),
-            pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)"
+            pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)",
+            position: readingPosition,
+            outline: chapterOutline
         )
+    }
+
+    private var readingPosition: String {
+        let total = viewModel.chapters.count
+        guard total > 0 else { return "position unknown" }
+        let current = viewModel.currentChapterIndex + 1
+        let percent = Int((Double(current) / Double(total) * 100).rounded())
+        return "chapter \(current) of \(total), about \(percent)% through the book"
+    }
+
+    /// A window of the table of contents around the reader.
+    ///
+    /// Windowed rather than complete because this book has hundreds of chapters, and
+    /// the whole list would crowd out the page itself in the model's context. What is
+    /// just behind and a good way ahead is enough to answer "where do I skip to?",
+    /// which is the question the full list would have been for.
+    private var chapterOutline: String {
+        let titles: [String] = viewModel.tableOfContents.isEmpty
+            ? viewModel.chapters.map(\.title)
+            : viewModel.tableOfContents.map(\.label)
+
+        guard !titles.isEmpty else { return "(not available for this book)" }
+
+        let current = min(viewModel.currentChapterIndex, titles.count - 1)
+        let start = max(0, current - 2)
+        let end = min(titles.count - 1, current + 25)
+
+        var lines: [String] = []
+        if start > 0 { lines.append("  … \(start) earlier chapter\(start == 1 ? "" : "s")") }
+
+        for index in start...end {
+            let marker = index == current ? "▸" : " "
+            lines.append("\(marker) \(index + 1). \(titles[index])")
+        }
+
+        let remaining = titles.count - 1 - end
+        if remaining > 0 { lines.append("  … \(remaining) more chapter\(remaining == 1 ? "" : "s") after this") }
+
+        return lines.joined(separator: "\n")
     }
 
     #endif

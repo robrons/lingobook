@@ -12,6 +12,19 @@ struct TutorContext: Sendable {
     let pageText: String
     /// Identifies which page this is, so a turned page can be noticed mid-conversation.
     let pageID: String
+
+    /// Where the reader is: "chapter 14 of 365, about 4% in".
+    let position: String
+
+    /// The chapters around the reader, current one marked.
+    ///
+    /// Without this the tutor knows the sentence in front of it and nothing else — not
+    /// what this edition contains, not what has been read, not what is coming. Asked
+    /// where to skip ahead to, it answers from a general memory of the novel and points
+    /// at chapters already finished, because it has never been told any of that.
+    /// A larger model would recall the book better and still be guessing about *this*
+    /// copy of it.
+    let outline: String
 }
 
 struct TutorMessage: Identifiable, Sendable, Equatable {
@@ -136,7 +149,14 @@ struct OllamaTutor: TutorService {
         let languageInstruction = languageInstruction(for: question)
         return """
         You are helping someone read “\(context.bookTitle)”. They are on the page below \
-        and can see it; so can you. The current chapter is “\(context.chapterTitle)”.
+        and can see it; so can you. The current chapter is “\(context.chapterTitle)” — \
+        \(context.position).
+
+        Where they are in the book, with ▸ marking the chapter they are reading. \
+        Anything above it they have already read; anything below is still to come. When \
+        they ask where to skip to or what is coming, answer from this list and name the \
+        chapter, never from general knowledge of the book:
+        \(context.outline)
 
         Answer whatever they ask about this page — what a word means, what just happened, \
         who someone is, a translation, the history behind a reference. Keep it short \
