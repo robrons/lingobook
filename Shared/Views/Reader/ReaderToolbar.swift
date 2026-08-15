@@ -12,6 +12,9 @@ struct ReaderToolbar: View {
     let isListening: Bool
     let onToggleListening: () -> Void
     @Binding var showThemeSettings: Bool
+    /// Defaulted so the iOS call site, which has no tutor, needs no change.
+    var isTutorVisible: Bool = false
+    var onToggleTutor: () -> Void = {}
     
     var body: some View {
         HStack(spacing: 0) {
@@ -73,6 +76,17 @@ struct ReaderToolbar: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.textColor.opacity(0.7))
                 
+                #if os(macOS)
+                // Mac only: the tutor talks to a model running on this machine.
+                Button(action: onToggleTutor) {
+                    Image(systemName: isTutorVisible ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.textColor.opacity(isTutorVisible ? 1 : 0.7))
+                .help("Ask about this page (⌘⇧T)")
+                #endif
+
                 Button { showThemeSettings.toggle() } label: {
                     Text("AA")
                         .font(.system(size: 14, weight: .medium))

@@ -12,12 +12,62 @@ struct ReaderView: View {
     
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ReaderViewModel()
+    #if os(macOS)
+    // The tutor keeps its own conversation, deliberately outside ReaderViewModel —
+    // asking a question must never be able to move the reader's place in the book.
+    @State private var tutor = TutorPanelModel()
+    @State private var showTutor = false
+    #endif
     
     #if os(macOS)
     @State private var eventMonitor: Any?
     #endif
     
     var body: some View {
+        HStack(spacing: 0) {
+            readerSurface
+
+            #if os(macOS)
+            if showTutor {
+                Divider()
+
+                // Real layout, not an overlay: opening the panel narrows the page, which
+                // repaginates the chapter. That's the honest behaviour — the text should
+                // reflow into the space it actually has, and `reconcileSize` already
+                // keeps the reader on the same sentence across a resize.
+                TutorPanel(
+                    model: tutor,
+                    theme: viewModel.currentTheme,
+                    context: TutorContext(
+                        bookTitle: book.title,
+                        chapterTitle: viewModel.currentChapterTitle,
+                        pageText: viewModel.currentPageContent.joined(separator: "\n\n")
+                    ),
+                    onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } }
+                )
+                .frame(width: 340)
+                .transition(.move(edge: .trailing))
+            }
+            #endif
+        }
+    }
+
+    /// Both are no-ops off the Mac, so the toolbar can pass them unconditionally.
+    private var isTutorVisible: Bool {
+        #if os(macOS)
+        showTutor
+        #else
+        false
+        #endif
+    }
+
+    private func toggleTutor() {
+        #if os(macOS)
+        withAnimation(.easeOut(duration: 0.2)) { showTutor.toggle() }
+        #endif
+    }
+
+    private var readerSurface: some View {
         ZStack {
             viewModel.currentTheme.pageColor
                 .ignoresSafeArea()
@@ -197,7 +247,9 @@ struct ReaderView: View {
                 onToggleRead: { viewModel.toggleReading() },
                 isListening: viewModel.speechService.isListening,
                 onToggleListening: { viewModel.speechService.toggleListening() },
-                showThemeSettings: $viewModel.showThemeSettings
+                showThemeSettings: $viewModel.showThemeSettings,
+                isTutorVisible: isTutorVisible,
+                onToggleTutor: toggleTutor
             )
             .popover(isPresented: $viewModel.showThemeSettings, arrowEdge: .top) {
                 ThemeSettings(

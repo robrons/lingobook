@@ -25,6 +25,10 @@
 		SH004001 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
 		SH004002 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
 		SH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
+		SH027001 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
+		SH027002 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
+		SH028001 /* TutorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH028000 /* TutorPanel.swift */; };
+		SH028002 /* TutorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH028000 /* TutorPanel.swift */; };
 		SH004005 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
 		SH019001 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
 		SH019002 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
@@ -83,6 +87,8 @@
 		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		SH004000 /* SummarizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarizationService.swift; sourceTree = "<group>"; };
 		SH004004 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
+		SH027000 /* TutorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorService.swift; sourceTree = "<group>"; };
+		SH028000 /* TutorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorPanel.swift; sourceTree = "<group>"; };
 		SH019000 /* SpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionService.swift; sourceTree = "<group>"; };
 		SH022000 /* TextMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextMeasurement.swift; sourceTree = "<group>"; };
 		SH025000 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
@@ -180,6 +186,7 @@
 				SH003000 /* TranslationService.swift */,
 				SH004000 /* SummarizationService.swift */,
 				SH004004 /* TTSService.swift */,
+				SH027000 /* TutorService.swift */,
 				SH019000 /* SpeechRecognitionService.swift */,
 			);
 			path = Services;
@@ -231,6 +238,7 @@
 				SH011000 /* BookTheme.swift */,
 				SH012000 /* PageView.swift */,
 				SH026000 /* JustifiedText.swift */,
+				SH028000 /* TutorPanel.swift */,
 				SH013000 /* ReaderToolbar.swift */,
 				SH014000 /* PageNavigator.swift */,
 				SH015000 /* ThemeSettings.swift */,
@@ -422,6 +430,8 @@
 				SH003001 /* TranslationService.swift in Sources */,
 				SH004001 /* SummarizationService.swift in Sources */,
 				SH004003 /* TTSService.swift in Sources */,
+				SH027001 /* TutorService.swift in Sources */,
+				SH028001 /* TutorPanel.swift in Sources */,
 				SH019001 /* SpeechRecognitionService.swift in Sources */,
 				SH020001 /* ModelContainerFactory.swift in Sources */,
 				SH022001 /* TextMeasurement.swift in Sources */,
@@ -456,6 +466,8 @@
 				SH003002 /* TranslationService.swift in Sources */,
 				SH004002 /* SummarizationService.swift in Sources */,
 				SH004005 /* TTSService.swift in Sources */,
+				SH027002 /* TutorService.swift in Sources */,
+				SH028002 /* TutorPanel.swift in Sources */,
 				SH019002 /* SpeechRecognitionService.swift in Sources */,
 				SH020002 /* ModelContainerFactory.swift in Sources */,
 				SH022002 /* TextMeasurement.swift in Sources */,
