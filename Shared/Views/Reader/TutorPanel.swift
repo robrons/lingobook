@@ -100,6 +100,8 @@ struct TutorPanel: View {
     var listeningStatus: String?
     /// Speaks a reply aloud on demand — playback is never automatic.
     var onSpeak: ((String) -> Void)?
+    /// Offered while weights are being fetched, in case a copy already exists on disk.
+    var onChooseModelFolder: (() -> Void)?
 
     /// Live drag, discarded when the gesture ends — the committed value moves to
     /// `model.position` so it outlives the gesture.
@@ -385,6 +387,14 @@ struct TutorPanel: View {
                 .font(.caption)
                 .foregroundStyle(theme.textColor.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let onChooseModelFolder {
+                Button("Use a copy already on this Mac…", action: onChooseModelFolder)
+                    .buttonStyle(.plain)
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             composerRow

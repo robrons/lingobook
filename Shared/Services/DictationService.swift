@@ -35,21 +35,41 @@ final class DictationService {
     private var asr: AsrManager?
 
     /// Parakeet wants 16kHz mono; the microphone will not be offering that.
-    private static let targetSampleRate = 16_000.0
+    private nonisolated static let targetSampleRate = 16_000.0
+
+    /// Where a shared copy of the weights lives, if the reader has pointed us at one.
+    ///
+    /// The sandbox rewrites this app's Application Support to its own container, so the
+    /// copy another app already downloaded is invisible by default and FluidAudio
+    /// fetches its own ~460MB. A security-scoped bookmark, granted once through an open
+    /// panel, is the sanctioned way back to the shared folder.
+    private static let bookmarkKey = "dictation.modelFolderBookmark"
 
     // MARK: - Model
 
-    /// Loads the model, downloading it the first time. Safe to call repeatedly.
+    /// True when weights must be fetched because no shared folder has been granted.
+    var willDownload: Bool { asr == nil && sharedModelFolder == nil }
+
+    /// Loads the model. Safe to call repeatedly.
+    ///
+    /// Explicitly v3. `UnifiedAsrManager` has the friendlier API — plain samples in,
+    /// string out, no decoder state — but its only weights are
+    /// `parakeet-unified-en-0.6b`, which is English-only. Multilingual recognition is
+    /// the entire reason for using Parakeet here, so this takes the wordier road for
+    /// the model that can actually hear French.
     func prepare() async {
         guard asr == nil else { return }
         state = .preparing
         do {
-            // Explicitly v3. `UnifiedAsrManager` has the friendlier API — plain samples
-            // in, string out, no decoder state — but its only weights are
-            // `parakeet-unified-en-0.6b`, which is English-only. Multilingual
-            // recognition is the entire reason for using Parakeet here, so this takes
-            // the wordier road for the model that can actually hear French.
-            let models = try await AsrModels.downloadAndLoad(version: .v3)
+            let models: AsrModels
+            if let folder = sharedModelFolder {
+                let accessed = folder.startAccessingSecurityScopedResource()
+                defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
+                models = try await AsrModels.load(from: folder, version: .v3)
+            } else {
+                models = try await AsrModels.downloadAndLoad(version: .v3)
+            }
+
             let manager = AsrManager(config: .default)
             try await manager.loadModels(models)
             asr = manager
@@ -58,6 +78,47 @@ final class DictationService {
             errorMessage = "Couldn't load the speech model: \(error.localizedDescription)"
             state = .idle
         }
+    }
+
+    // MARK: - Sharing another app's weights
+
+    /// Remembers a folder the reader granted, and loads from it instead of downloading.
+    func useModelFolder(_ url: URL) async {
+        do {
+            let bookmark = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
+            asr = nil
+            await prepare()
+        } catch {
+            errorMessage = "Couldn't keep access to that folder: \(error.localizedDescription)"
+        }
+    }
+
+    /// The granted folder, if one still resolves.
+    private var sharedModelFolder: URL? {
+        guard let bookmark = UserDefaults.standard.data(forKey: Self.bookmarkKey) else { return nil }
+
+        var stale = false
+        guard
+            let url = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &stale
+            ),
+            !stale
+        else {
+            // The folder moved or was deleted; forget it and fall back to downloading
+            // rather than failing every time from here on.
+            UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
+            return nil
+        }
+
+        return url
     }
 
     // MARK: - Recording
@@ -142,7 +203,13 @@ final class DictationService {
     // MARK: - Audio plumbing
 
     /// Converts one captured buffer to 16kHz mono float samples.
-    private static func resample(
+    ///
+    /// `nonisolated` is load-bearing, not decoration. This runs from the tap callback on
+    /// a realtime audio thread; as an ordinary member of a `@MainActor` type it inherits
+    /// main-actor isolation, and Swift 6 traps the process the first time the audio
+    /// thread calls it — `dispatch_assert_queue_fail`, straight to a crash on the first
+    /// press of the key. It touches no instance state, so isolation buys nothing here.
+    private nonisolated static func resample(
         _ buffer: AVAudioPCMBuffer,
         using converter: AVAudioConverter,
         to format: AVAudioFormat

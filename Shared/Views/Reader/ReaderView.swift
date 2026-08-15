@@ -41,7 +41,8 @@ struct ReaderView: View {
                     context: tutorContext,
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } },
                     listeningStatus: dictationStatus,
-                    onSpeak: { viewModel.ttsService.speak($0) }
+                    onSpeak: { viewModel.ttsService.speak($0) },
+                    onChooseModelFolder: modelFolderPicker
                 )
                 .onAppear {
                     installPushToTalk()
@@ -63,6 +64,13 @@ struct ReaderView: View {
 
     #if os(macOS)
 
+    /// Only offered while a download is actually pending — pointing at a folder is
+    /// pointless once the weights are loaded.
+    private var modelFolderPicker: (() -> Void)? {
+        guard dictation.state == .preparing, dictation.willDownload else { return nil }
+        return chooseModelFolder
+    }
+
     private var dictationStatus: String? {
         switch dictation.state {
         case .listening: "Listening — release space to send"
@@ -72,6 +80,27 @@ struct ReaderView: View {
         case .preparing: "Fetching the speech model — one time, ~460 MB…"
         case .idle: nil
         }
+    }
+
+    /// Lets the reader point at weights another app already downloaded.
+    ///
+    /// The sandbox hides the shared Application Support folder from this app, so the
+    /// same 460MB would otherwise be fetched a second time. An open panel runs outside
+    /// the sandbox and hands back a folder the app is then allowed to read.
+    private func chooseModelFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the “parakeet-tdt-0.6b-v3-coreml” folder to reuse those weights."
+        panel.prompt = "Use This Folder"
+        // Sandboxed, NSHomeDirectory() is the container — the panel needs the real one.
+        panel.directoryURL = URL(
+            fileURLWithPath: "/Users/\(NSUserName())/Library/Application Support/FluidAudio/Models"
+        )
+
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        Task { await dictation.useModelFolder(folder) }
     }
 
     /// Hold-to-talk on the space bar.
