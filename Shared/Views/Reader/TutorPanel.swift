@@ -177,7 +177,11 @@ struct TutorPanel: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture()
+        // `.global`, not the default local space. Locally, translation is measured
+        // against a view that this very gesture is moving — each frame shifts the
+        // origin the next event is measured from, so the card chases the cursor and
+        // judders. Global coordinates don't move under it.
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .updating($dragTranslation) { value, state, _ in
                 state = value.translation
             }
@@ -355,7 +359,23 @@ private struct MarkdownText: View {
         case item(marker: String, text: String)
     }
 
+    /// Parsed replies, kept between renders.
+    ///
+    /// A drag re-evaluates this view on every mouse event, and re-splitting every
+    /// message in the transcript each time was the other half of the judder. The reply
+    /// text is a perfectly good cache key: while dragging it isn't changing at all, and
+    /// while streaming only the last message's entry is ever missed.
+    @MainActor private static var cache: [String: [Block]] = [:]
+
     private var blocks: [Block] {
+        if let hit = Self.cache[raw] { return hit }
+        let parsed = parse()
+        if Self.cache.count > 512 { Self.cache.removeAll(keepingCapacity: true) }
+        Self.cache[raw] = parsed
+        return parsed
+    }
+
+    private func parse() -> [Block] {
         var out: [Block] = []
         var pending: [String] = []
 

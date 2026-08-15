@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// What the tutor can see of what you're reading.
 ///
@@ -101,14 +102,40 @@ struct OllamaTutor: TutorService {
     /// politeness. Asked what `ne … point` is doing, an 8B model confidently explains
     /// that it reinforces a `pas` that isn't in the clause — fluent, authoritative, and
     /// wrong. A reader who is still learning the language cannot catch that.
-    private func systemPrompt(for context: TutorContext) -> String {
-        """
+    /// Names the reply language outright instead of asking the model to infer it.
+    ///
+    /// Telling it to "answer in the language they asked in" doesn't survive contact with
+    /// a French page: given Hugo as context, this model answers an English question in
+    /// French. Detection happens here, on device, and the instruction is stated as a
+    /// fact — which it follows. Ambiguous or very short input falls back to English,
+    /// since that is what a reader of an English-language app expects by default.
+    private func languageInstruction(for question: String) -> String {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(question)
+        let french = recognizer.languageHypotheses(withMaximum: 3)[.french] ?? 0
+
+        if french > 0.6 {
+            return """
+            The reader wrote to you in French — they are practising the language. Reply \
+            in French, pitched at the level they wrote at. Do not switch to English to \
+            be helpful.
+            """
+        }
+
+        return "The reader wrote to you in English. Reply in English, even though the page is French."
+    }
+
+    private func systemPrompt(for context: TutorContext, question: String) -> String {
+        let languageInstruction = languageInstruction(for: question)
+        return """
         You are helping someone read “\(context.bookTitle)”. They are on the page below \
         and can see it; so can you. The current chapter is “\(context.chapterTitle)”.
 
         Answer whatever they ask about this page — what a word means, what just happened, \
-        who someone is, a translation, the history behind a reference. Reply in English, \
-        and keep it short unless they ask for depth.
+        who someone is, a translation, the history behind a reference. Keep it short \
+        unless they ask for depth.
+
+        \(languageInstruction)
 
         Do not correct their spelling or grammar, and do not turn an answer into a \
         language lesson. If they want grammar explained they will ask; until then, just \
@@ -134,7 +161,7 @@ struct OllamaTutor: TutorService {
             let task = Task {
                 do {
                     var wire: [WireMessage] = [
-                        WireMessage(role: "system", content: systemPrompt(for: context))
+                        WireMessage(role: "system", content: systemPrompt(for: context, question: question))
                     ]
                     wire += history.map {
                         WireMessage(role: $0.role == .reader ? "user" : "assistant", content: $0.text)
