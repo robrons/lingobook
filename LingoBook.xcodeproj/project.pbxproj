@@ -22,8 +22,6 @@
 		SH021002 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
 		SH003001 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
 		SH003002 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
-		SH004001 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
-		SH004002 /* SummarizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004000 /* SummarizationService.swift */; };
 		SH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
 		SH027001 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
 		SH027002 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
@@ -68,8 +66,6 @@
 		SH016002 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH016000 /* ReaderView.swift */; };
 		SH017001 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
 		SH017002 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
-		SH018001 /* SummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH018000 /* SummarySheet.swift */; };
-		SH018002 /* SummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH018000 /* SummarySheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,7 +81,6 @@
 		SH002000 /* EPUBService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EPUBService.swift; sourceTree = "<group>"; };
 		SH021000 /* XHTMLTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHTMLTextParser.swift; sourceTree = "<group>"; };
 		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
-		SH004000 /* SummarizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarizationService.swift; sourceTree = "<group>"; };
 		SH004004 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
 		SH027000 /* TutorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorService.swift; sourceTree = "<group>"; };
 		SH028000 /* TutorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorPanel.swift; sourceTree = "<group>"; };
@@ -108,7 +103,6 @@
 		SH015000 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
 		SH016000 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		SH017000 /* TOCSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOCSheet.swift; sourceTree = "<group>"; };
-		SH018000 /* SummarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarySheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -184,7 +178,6 @@
 				SH002000 /* EPUBService.swift */,
 				SH021000 /* XHTMLTextParser.swift */,
 				SH003000 /* TranslationService.swift */,
-				SH004000 /* SummarizationService.swift */,
 				SH004004 /* TTSService.swift */,
 				SH027000 /* TutorService.swift */,
 				SH019000 /* SpeechRecognitionService.swift */,
@@ -244,7 +237,6 @@
 				SH015000 /* ThemeSettings.swift */,
 				SH016000 /* ReaderView.swift */,
 				SH017000 /* TOCSheet.swift */,
-				SH018000 /* SummarySheet.swift */,
 			);
 			path = Reader;
 			sourceTree = "<group>";
@@ -428,7 +420,6 @@
 				SH002001 /* EPUBService.swift in Sources */,
 				SH021001 /* XHTMLTextParser.swift in Sources */,
 				SH003001 /* TranslationService.swift in Sources */,
-				SH004001 /* SummarizationService.swift in Sources */,
 				SH004003 /* TTSService.swift in Sources */,
 				SH027001 /* TutorService.swift in Sources */,
 				SH028001 /* TutorPanel.swift in Sources */,
@@ -451,7 +442,6 @@
 				SH015001 /* ThemeSettings.swift in Sources */,
 				SH016001 /* ReaderView.swift in Sources */,
 				SH017001 /* TOCSheet.swift in Sources */,
-				SH018001 /* SummarySheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,7 +454,6 @@
 				SH002002 /* EPUBService.swift in Sources */,
 				SH021002 /* XHTMLTextParser.swift in Sources */,
 				SH003002 /* TranslationService.swift in Sources */,
-				SH004002 /* SummarizationService.swift in Sources */,
 				SH004005 /* TTSService.swift in Sources */,
 				SH027002 /* TutorService.swift in Sources */,
 				SH028002 /* TutorPanel.swift in Sources */,
@@ -487,7 +476,6 @@
 				SH015002 /* ThemeSettings.swift in Sources */,
 				SH016002 /* ReaderView.swift in Sources */,
 				SH017002 /* TOCSheet.swift in Sources */,
-				SH018002 /* SummarySheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

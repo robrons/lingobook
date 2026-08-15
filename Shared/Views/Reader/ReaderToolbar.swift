@@ -6,7 +6,6 @@ struct ReaderToolbar: View {
     let theme: BookTheme
     let onBack: () -> Void
     let onShowTOC: () -> Void
-    let onShowSummary: () -> Void
     let isReading: Bool
     let onToggleRead: () -> Void
     let isListening: Bool
@@ -53,7 +52,7 @@ struct ReaderToolbar: View {
             
             Spacer()
             
-            // Right side: Mic + Audio + Summarize + AA
+            // Right side: Mic + Audio + Tutor + AA
             HStack(spacing: 16) {
                 Button(action: onToggleListening) {
                     Image(systemName: isListening ? "mic.fill" : "mic")
@@ -68,13 +67,6 @@ struct ReaderToolbar: View {
                         .foregroundStyle(isReading ? .red : theme.textColor.opacity(0.7))
                 }
                 .buttonStyle(.plain)
-                
-                Button(action: onShowSummary) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.textColor.opacity(0.7))
                 
                 #if os(macOS)
                 // Mac only: the tutor talks to a model running on this machine.
@@ -117,7 +109,6 @@ struct ReaderToolbar: View {
         theme: .calm,
         onBack: {},
         onShowTOC: {},
-        onShowSummary: {},
         isReading: false,
         onToggleRead: {},
         isListening: false,

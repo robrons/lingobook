@@ -123,7 +123,7 @@ final class ReaderViewModel {
 
     /// Something is open that's anchored to the chrome, so it must stay put.
     private var isOverlayPresented: Bool {
-        showTOC || showSummarySheet || showThemeSettings
+        showTOC || showThemeSettings
     }
 
     /// Pointer moved (macOS). Show the chrome, then start the clock again.
@@ -191,15 +191,12 @@ final class ReaderViewModel {
         handleSizeChange(newSize: newSize)
     }
     
-    // MARK: - Summarization
-    var showSummarySheet = false
-    
     // MARK: - Services
     private let epubService = EPUBService()
     
     // MARK: - Computed Properties
     
-    /// Everything on the page in reading order. What TTS reads, what gets summarised,
+    /// Everything on the page in reading order. What TTS reads, what the tutor is shown,
     /// and what gets sent for translation — all of which want a flat list.
     var currentPageContent: [String] {
         guard currentPageIndex >= 0 && currentPageIndex < pages.count else { return [] }

@@ -24,17 +24,15 @@ struct ReaderView: View {
     #endif
     
     var body: some View {
-        HStack(spacing: 0) {
+        ZStack(alignment: .bottomTrailing) {
             readerSurface
 
             #if os(macOS)
             if showTutor {
-                Divider()
-
-                // Real layout, not an overlay: opening the panel narrows the page, which
-                // repaginates the chapter. That's the honest behaviour — the text should
-                // reflow into the space it actually has, and `reconcileSize` already
-                // keeps the reader on the same sentence across a resize.
+                // Floats over the page rather than taking layout space. Taking space
+                // would narrow the column and repaginate — dropping a two-column spread
+                // to one — so the book would rearrange itself every time a question was
+                // asked. The page stays exactly where it was; only this card appears.
                 TutorPanel(
                     model: tutor,
                     theme: viewModel.currentTheme,
@@ -45,8 +43,9 @@ struct ReaderView: View {
                     ),
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } }
                 )
-                .frame(width: 340)
-                .transition(.move(edge: .trailing))
+                .frame(width: 380, height: 480)
+                .padding(24)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
             }
             #endif
         }
@@ -152,7 +151,7 @@ struct ReaderView: View {
         .toolbar(.hidden)
         .onAppear {
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                guard !viewModel.showTOC, !viewModel.showSummarySheet, !viewModel.showThemeSettings else {
+                guard !viewModel.showTOC, !viewModel.showThemeSettings else {
                     return event
                 }
                 
@@ -190,13 +189,6 @@ struct ReaderView: View {
                     viewModel.showTOC = false
                 },
                 onDismiss: { viewModel.showTOC = false }
-            )
-        }
-        .sheet(isPresented: $viewModel.showSummarySheet) {
-            SummarySheet(
-                chapterTitle: "Page \(viewModel.currentPageIndex + 1)",
-                chapterText: viewModel.currentPageContent.joined(separator: "\n\n"),
-                onDismiss: { viewModel.showSummarySheet = false }
             )
         }
         .translationPresentation(isPresented: $viewModel.showSystemTranslation, text: viewModel.textToTranslate)
@@ -242,7 +234,6 @@ struct ReaderView: View {
                     goBack()
                 },
                 onShowTOC: { viewModel.showTOC = true },
-                onShowSummary: { viewModel.showSummarySheet = true },
                 isReading: viewModel.ttsService.isPlaying,
                 onToggleRead: { viewModel.toggleReading() },
                 isListening: viewModel.speechService.isListening,

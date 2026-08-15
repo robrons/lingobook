@@ -82,28 +82,33 @@ struct OllamaTutor: TutorService {
 
     // MARK: - Prompt
 
-    /// The tutor's standing instructions.
+    /// The assistant's standing instructions.
     ///
-    /// The line about admitting uncertainty is load-bearing, not politeness. A small
-    /// model asked about `ne … point` will confidently explain that it reinforces a
-    /// `pas` that isn't there — fluent, authoritative, and wrong. A reader learning the
-    /// language cannot catch that, so the model is told to flag its own doubt.
+    /// Deliberately *not* a tutor persona. Given a teaching role, a model volunteers
+    /// grammar drills and corrects the reader's own phrasing — turning every question
+    /// into a lesson nobody asked for. Its job here is narrower and more useful: know
+    /// what is on the page, then answer whatever is actually asked about it.
+    ///
+    /// The line about admitting uncertainty stays, and is load-bearing rather than
+    /// politeness. Asked what `ne … point` is doing, an 8B model confidently explains
+    /// that it reinforces a `pas` that isn't in the clause — fluent, authoritative, and
+    /// wrong. A reader who is still learning the language cannot catch that.
     private func systemPrompt(for context: TutorContext) -> String {
         """
-        You are a French reading tutor sitting beside an English speaker who is reading \
-        “\(context.bookTitle)”. They can see the page; you can too.
+        You are helping someone read “\(context.bookTitle)”. They are on the page below \
+        and can see it; so can you. The current chapter is “\(context.chapterTitle)”.
 
-        Answer in English, concisely — two or three sentences unless asked for more.
-        Quote the French you are discussing inside « guillemets ».
-        Name tenses, moods and constructions explicitly (passé simple, subjonctif, \
-        and so on) — the reader is trying to learn them, not just get past them.
-        If you are not certain, say so plainly instead of guessing. A confident wrong \
-        answer teaches them something false, which is worse than saying "I'm not sure".
-        Do not translate the whole passage unless you are asked to.
+        Answer whatever they ask about this page — what a word means, what just happened, \
+        who someone is, a translation, the history behind a reference. Reply in English, \
+        and keep it short unless they ask for depth.
 
-        The current chapter is “\(context.chapterTitle)”.
+        Do not correct their spelling or grammar, and do not turn an answer into a \
+        language lesson. If they want grammar explained they will ask; until then, just \
+        answer the question.
 
-        The page in front of them reads:
+        If you are not certain, say so plainly instead of guessing.
+
+        The page reads:
         \"\"\"
         \(context.pageText)
         \"\"\"

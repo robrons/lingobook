@@ -98,7 +98,15 @@ struct TutorPanel: View {
 
             composer
         }
-        .background(theme.pageColor)
+        // Material rather than the page colour: this card sits *above* the text, and
+        // needs to read as floating rather than as a torn-off piece of the page.
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(theme.textColor.opacity(0.12))
+        )
+        .shadow(color: .black.opacity(0.28), radius: 22, y: 8)
     }
 
     // MARK: - Header
