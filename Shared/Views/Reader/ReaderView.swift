@@ -43,7 +43,9 @@ struct ReaderView: View {
                     ),
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } }
                 )
-                .frame(width: 380, height: 480)
+                // Height is the panel's own business — it collapses to a title bar
+                // when minimised.
+                .frame(width: 380)
                 .padding(24)
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
             }

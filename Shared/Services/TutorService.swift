@@ -72,12 +72,20 @@ struct OllamaTutor: TutorService {
     let model: String
     let endpoint: URL
 
+    /// Ollama defaults to 4,096, which the page text and system prompt eat about a
+    /// quarter of before a question is asked — a conversation then starts silently
+    /// forgetting its own opening. 16K leaves room to actually hold a discussion; the
+    /// cost is a larger KV cache in memory, which on this model is a few hundred MB.
+    let contextTokens: Int
+
     init(
         model: String = "ministral-3:8b",
-        endpoint: URL = URL(string: "http://localhost:11434/api/chat")!
+        endpoint: URL = URL(string: "http://localhost:11434/api/chat")!,
+        contextTokens: Int = 16_384
     ) {
         self.model = model
         self.endpoint = endpoint
+        self.contextTokens = contextTokens
     }
 
     // MARK: - Prompt
@@ -137,7 +145,12 @@ struct OllamaTutor: TutorService {
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.httpBody = try JSONEncoder().encode(
-                        ChatRequest(model: model, messages: wire, stream: true)
+                        ChatRequest(
+                            model: model,
+                            messages: wire,
+                            stream: true,
+                            options: .init(num_ctx: contextTokens)
+                        )
                     )
                     // Generous: the first request after a cold start pays for loading
                     // several gigabytes of weights into memory before a token appears.
@@ -185,9 +198,13 @@ struct OllamaTutor: TutorService {
     }
 
     private struct ChatRequest: Encodable {
+        struct Options: Encodable {
+            let num_ctx: Int
+        }
         let model: String
         let messages: [WireMessage]
         let stream: Bool
+        let options: Options
     }
 
     private struct ChatChunk: Decodable {

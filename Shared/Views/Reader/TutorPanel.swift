@@ -13,6 +13,14 @@ final class TutorPanelModel {
     var isResponding = false
     var errorMessage: String?
 
+    /// Collapsed to just its title bar. Kept here rather than in the view so the panel
+    /// reopens the way it was left.
+    var isMinimized = false
+
+    /// Displacement from the panel's resting corner, in points. Also here so dragging
+    /// the card somewhere useful survives closing and reopening it.
+    var position: CGSize = .zero
+
     private let tutor: any TutorService
     private var streamTask: Task<Void, Never>?
 
@@ -70,7 +78,7 @@ final class TutorPanelModel {
     }
 }
 
-/// The tutor's side panel: ask about the page you're on, in plain language.
+/// The tutor's floating panel: ask about the page you're on, in plain language.
 struct TutorPanel: View {
 
     @Bindable var model: TutorPanelModel
@@ -78,26 +86,35 @@ struct TutorPanel: View {
     let context: TutorContext
     let onClose: () -> Void
 
+    /// Live drag, discarded when the gesture ends — the committed value moves to
+    /// `model.position` so it outlives the gesture.
+    @GestureState private var dragTranslation: CGSize = .zero
+
+    private static let expandedHeight: CGFloat = 480
+
     var body: some View {
         VStack(spacing: 0) {
             header
 
-            Divider()
+            if !model.isMinimized {
+                Divider()
 
-            if model.messages.isEmpty {
-                emptyState
-            } else {
-                transcript
+                if model.messages.isEmpty {
+                    emptyState
+                } else {
+                    transcript
+                }
+
+                if let errorMessage = model.errorMessage {
+                    errorNotice(errorMessage)
+                }
+
+                Divider()
+
+                composer
             }
-
-            if let errorMessage = model.errorMessage {
-                errorNotice(errorMessage)
-            }
-
-            Divider()
-
-            composer
         }
+        .frame(height: model.isMinimized ? nil : Self.expandedHeight)
         // Material rather than the page colour: this card sits *above* the text, and
         // needs to read as floating rather than as a torn-off piece of the page.
         .background(.regularMaterial)
@@ -107,9 +124,13 @@ struct TutorPanel: View {
                 .strokeBorder(theme.textColor.opacity(0.12))
         )
         .shadow(color: .black.opacity(0.28), radius: 22, y: 8)
+        .offset(
+            x: model.position.width + dragTranslation.width,
+            y: model.position.height + dragTranslation.height
+        )
     }
 
-    // MARK: - Header
+    // MARK: - Header (also the drag handle)
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -122,12 +143,22 @@ struct TutorPanel: View {
 
             Spacer()
 
-            if !model.messages.isEmpty {
+            if !model.messages.isEmpty && !model.isMinimized {
                 Button("Clear", action: model.clear)
                     .buttonStyle(.plain)
                     .font(.caption)
                     .foregroundStyle(theme.textColor.opacity(0.6))
             }
+
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { model.isMinimized.toggle() }
+            } label: {
+                Image(systemName: model.isMinimized ? "chevron.up" : "minus")
+                    .foregroundStyle(theme.textColor.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .help(model.isMinimized ? "Expand" : "Minimise")
+            .accessibilityLabel(model.isMinimized ? "Expand tutor" : "Minimise tutor")
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
@@ -138,6 +169,24 @@ struct TutorPanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        // The whole bar is the grab area, so there's a generous target that isn't a
+        // button. `contentShape` after the padding, or the gaps between controls
+        // wouldn't drag.
+        .contentShape(Rectangle())
+        .gesture(dragGesture)
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .updating($dragTranslation) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                // Clamped so the card can't be thrown off-screen and stranded there.
+                // It rests in the bottom-right corner, so travel is leftward and upward.
+                model.position.width = min(40, max(-1100, model.position.width + value.translation.width))
+                model.position.height = min(40, max(-760, model.position.height + value.translation.height))
+            }
     }
 
     // MARK: - Body states
@@ -154,7 +203,7 @@ struct TutorPanel: View {
                 .font(.callout)
                 .foregroundStyle(theme.textColor.opacity(0.6))
 
-            Text("“Why « resta » and not « restait » ?”")
+            Text("“What's quinquina, and why is she making it?”")
                 .font(.caption)
                 .italic()
                 .multilineTextAlignment(.center)
@@ -196,12 +245,18 @@ struct TutorPanel: View {
                 // The model can take a few seconds to produce its first token.
                 ProgressView()
                     .controlSize(.small)
-            } else {
+            } else if message.role == .reader {
+                // The reader's own words go through verbatim — nothing to interpret.
                 Text(message.text)
                     .font(.callout)
-                    .foregroundStyle(theme.textColor.opacity(message.role == .reader ? 0.75 : 1))
+                    .foregroundStyle(theme.textColor.opacity(0.75))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                MarkdownText(raw: message.text)
+                    .font(.callout)
+                    .foregroundStyle(theme.textColor)
+                    .textSelection(.enabled)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -257,5 +312,98 @@ struct TutorPanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Markdown
+
+/// Renders the small slice of Markdown a chat model actually emits.
+///
+/// SwiftUI's `Text` will parse *inline* Markdown from an `AttributedString` — bold,
+/// italic, code — but knows nothing about block structure, so a numbered list arrives
+/// as one run-on paragraph with its asterisks showing. This splits the reply into
+/// paragraphs and list items first, then hands each line's inline markup to
+/// `AttributedString`. Anything it doesn't recognise falls through as plain text,
+/// which is the right failure: a stray asterisk beats a blank bubble.
+private struct MarkdownText: View {
+
+    let raw: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .paragraph(let text):
+                    inline(text)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                case .item(let marker, let text):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(marker)
+                            .monospacedDigit()
+                        inline(text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private enum Block {
+        case paragraph(String)
+        case item(marker: String, text: String)
+    }
+
+    private var blocks: [Block] {
+        var out: [Block] = []
+        var pending: [String] = []
+
+        func flushParagraph() {
+            let joined = pending.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            if !joined.isEmpty { out.append(.paragraph(joined)) }
+            pending.removeAll()
+        }
+
+        for line in raw.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.isEmpty {
+                flushParagraph()
+            } else if let item = listItem(trimmed) {
+                flushParagraph()
+                out.append(.item(marker: item.marker, text: item.text))
+            } else {
+                pending.append(trimmed)
+            }
+        }
+
+        flushParagraph()
+        return out
+    }
+
+    /// A leading `1.` or `-` marker, if the line opens a list item.
+    ///
+    /// The bullet pattern requires whitespace after the marker, which is what keeps a
+    /// line beginning `**Hougomont**` from being mistaken for a `*` bullet.
+    private func listItem(_ line: String) -> (marker: String, text: String)? {
+        if let range = line.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
+            return (String(line[range]).trimmingCharacters(in: .whitespaces),
+                    String(line[range.upperBound...]))
+        }
+        if let range = line.range(of: #"^[-*•]\s+"#, options: .regularExpression) {
+            return ("•", String(line[range.upperBound...]))
+        }
+        return nil
+    }
+
+    private func inline(_ text: String) -> Text {
+        guard let attributed = try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) else {
+            return Text(text)
+        }
+        return Text(attributed)
     }
 }
