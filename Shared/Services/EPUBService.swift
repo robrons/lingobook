@@ -12,6 +12,10 @@ class EPUBService {
         var coverData: Data?
         var chapters: [Chapter]
         var tableOfContents: [TOCItem]
+        /// BCP-47 code from `<dc:language>`, when the package file declares one. The
+        /// parser has always collected this; it just had nowhere to go until the tutor
+        /// needed to know what language the book it's discussing is written in.
+        var language: String?
     }
     
     struct Chapter: Identifiable, Hashable {
@@ -112,7 +116,8 @@ class EPUBService {
             author: metadata["creator"] ?? "Unknown Author",
             coverData: coverData,
             chapters: chapters,
-            tableOfContents: toc
+            tableOfContents: toc,
+            language: metadata["language"]
         )
     }
     

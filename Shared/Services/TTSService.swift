@@ -2,9 +2,6 @@ import Foundation
 import AVFoundation
 import SwiftUI
 import NaturalLanguage
-#if os(iOS)
-import MediaPlayer
-#endif
 
 enum TTSLanguage: String, CaseIterable, Identifiable {
     case both = "Both"
@@ -56,54 +53,13 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         super.init()
         synthesizer.delegate = self
 
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
-        setupRemoteCommands()
-        #endif
     }
-
-    #if os(iOS)
-    /// Lock screen, headphones, car steering wheel — anywhere a play/pause button lives.
-    /// Without these, reading dies the moment the phone locks in the cupholder.
-    private func setupRemoteCommands() {
-        let center = MPRemoteCommandCenter.shared()
-
-        center.playCommand.addTarget { [weak self] _ in
-            guard let self, self.isPlaying, self.isPaused else { return .noActionableNowPlayingItem }
-            DispatchQueue.main.async { self.resume() }
-            return .success
-        }
-
-        center.pauseCommand.addTarget { [weak self] _ in
-            guard let self, self.isPlaying, !self.isPaused else { return .noActionableNowPlayingItem }
-            DispatchQueue.main.async { self.pause() }
-            return .success
-        }
-
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            guard let self, self.isPlaying else { return .noActionableNowPlayingItem }
-            DispatchQueue.main.async { self.isPaused ? self.resume() : self.pause() }
-            return .success
-        }
-    }
-    #endif
 
     /// Reflects state onto the lock screen so the pause button there shows the truth.
     private func updateNowPlaying(rate: Float) {
-        #if os(iOS)
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
-            MPMediaItemPropertyTitle: nowPlayingTitle.isEmpty ? "LingoBook" : nowPlayingTitle,
-            MPMediaItemPropertyArtist: "LingoBook",
-            MPNowPlayingInfoPropertyPlaybackRate: rate
-        ]
-        #endif
     }
 
     private func clearNowPlaying() {
-        #if os(iOS)
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        #endif
     }
 
     func play(originalParagraphs: [String], englishParagraphs: [String], title: String = "") {

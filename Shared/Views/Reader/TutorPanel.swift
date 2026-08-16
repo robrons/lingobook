@@ -1,5 +1,59 @@
 import SwiftUI
 
+/// What the tutor has been briefed on, in a form the panel can state plainly.
+///
+/// Added because the first version of all this was silent about itself. Background that
+/// was still being fetched, background that had failed, and a book Wikipedia has simply
+/// never heard of all looked exactly alike from the reader's side — a tutor that just
+/// didn't mention it. There was no way to tell "not ready yet" from "not working", which
+/// makes the feature impossible to judge and easy to blame unfairly.
+struct TutorBriefing: Equatable {
+
+    /// One thing that has to be in place, and whether it is.
+    struct Item: Identifiable, Equatable {
+        enum State: Equatable {
+            /// In place. Nothing further will happen.
+            case ready
+            /// Happening now — worth waiting for.
+            case working
+            /// Won't happen without something changing. Not a delay.
+            case blocked
+            /// Deliberately not happening, because it was switched off.
+            case off
+        }
+
+        let id: String
+        let title: String
+        let detail: String
+        let state: State
+    }
+
+    /// Everything the tutor needs, in the order it matters.
+    ///
+    /// A list rather than a sentence, because the previous version reported its state as
+    /// one composed line and there was no way to tell whether the single green check
+    /// covered everything or was one item out of five. A reader deciding whether to trust
+    /// an answer needs to be able to count the steps.
+    var items: [Item]
+
+    var readyCount: Int { items.filter { $0.state == .ready }.count }
+    /// Items that were switched off aren't outstanding; they're answered.
+    var settledCount: Int { items.filter { $0.state != .working }.count }
+    var isSettled: Bool { !items.contains { $0.state == .working } }
+
+    /// The headline: a count first, then whatever is still moving.
+    var summary: String {
+        if let working = items.first(where: { $0.state == .working }) {
+            return "\(readyCount) of \(items.count) ready · \(working.detail)"
+        }
+        if let blocked = items.first(where: { $0.state == .blocked }) {
+            return "\(readyCount) of \(items.count) ready · \(blocked.detail)"
+        }
+        if readyCount == items.count { return "Ready — all \(items.count) checks passed" }
+        return "\(readyCount) of \(items.count) ready"
+    }
+}
+
 /// Holds one conversation with the tutor about the book being read.
 ///
 /// Deliberately separate from `ReaderViewModel`: the tutor is a guest in the reader,
@@ -17,6 +71,17 @@ final class TutorPanelModel {
     /// reopens the way it was left.
     var isMinimized = false
 
+    /// Whether the readiness checklist is open. Starts open: the first question of a
+    /// session is the one most likely to be asked of a tutor that isn't ready yet.
+    var isBriefingExpanded = true
+
+    /// Whether Ollama is running, and whether the model is loaded.
+    var engineState: Ollama.EngineState = .checking
+
+    func refreshEngineState() async {
+        engineState = await Ollama.engineState()
+    }
+
     /// Displacement from the panel's resting corner, in points. Also here so dragging
     /// the card somewhere useful survives closing and reopening it.
     var position: CGSize = .zero
@@ -28,10 +93,21 @@ final class TutorPanelModel {
     private var lastPageID: String?
 
     private let tutor: any TutorService
+
+    /// Looks up what the question is about before the question is sent.
+    ///
+    /// Nil disables it entirely — which is what the Settings toggle amounts to, and what
+    /// a test that shouldn't touch the network passes.
+    private let referenceLookup: ReferenceLookup?
+
     private var streamTask: Task<Void, Never>?
 
-    init(tutor: any TutorService = OllamaTutor()) {
+    init(
+        tutor: any TutorService = OllamaTutor(),
+        referenceLookup: ReferenceLookup? = ReferenceLookup()
+    ) {
         self.tutor = tutor
+        self.referenceLookup = referenceLookup
     }
 
     var canSend: Bool {
@@ -60,7 +136,24 @@ final class TutorPanelModel {
         messages.append(reply)
         isResponding = true
 
-        streamTask = Task { [tutor] in
+        streamTask = Task { [tutor, referenceLookup] in
+            var context = context
+
+            // Retrieval happens here rather than inside the tutor, because it isn't the
+            // model's job to decide when to look something up — and the panel already
+            // shows a spinner until the first token, so the wait has somewhere to live.
+            if let referenceLookup,
+               let notes = await referenceLookup.referenceBlock(
+                   for: question,
+                   bookLanguage: context.language,
+                   excluding: [context.bookTitle, context.bookAuthor]
+               ) {
+                context.references = notes.block
+                if let index = messages.firstIndex(where: { $0.id == reply.id }) {
+                    messages[index].references = notes.titles
+                }
+            }
+
             do {
                 for try await piece in tutor.stream(
                     question: question, context: context, history: history
@@ -98,6 +191,8 @@ struct TutorPanel: View {
     @Bindable var model: TutorPanelModel
     let theme: BookTheme
     let context: TutorContext
+    /// What the tutor currently knows, stated in the panel so it never has to be guessed.
+    let briefing: TutorBriefing
     let onClose: () -> Void
     /// Non-nil while the reader is holding space to dictate.
     var listeningStatus: String?
@@ -121,6 +216,10 @@ struct TutorPanel: View {
 
             if !model.isMinimized {
                 Divider()
+
+                briefingRow
+
+                Divider().opacity(0.4)
 
                 if model.messages.isEmpty {
                     emptyState
@@ -240,6 +339,96 @@ struct TutorPanel: View {
             }
     }
 
+    // MARK: - What the tutor knows
+
+    /// A permanent, countable answer to "is this thing actually ready?".
+    ///
+    /// The summary line is always visible; tapping it opens the itemised list, so the
+    /// reader can see every step rather than infer the whole from one green check.
+    private var briefingRow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.16)) { model.isBriefingExpanded.toggle() }
+            } label: {
+                HStack(spacing: 7) {
+                    Group {
+                        if briefing.isSettled {
+                            Image(systemName: briefing.readyCount == briefing.items.count
+                                  ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        } else {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(briefing.readyCount == briefing.items.count
+                                     ? .green.opacity(0.8) : theme.textColor.opacity(0.5))
+                    .frame(width: 12)
+
+                    Text(briefing.summary)
+                        .font(.caption2)
+                        .foregroundStyle(theme.textColor.opacity(0.55))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .rotationEffect(.degrees(model.isBriefingExpanded ? 0 : -90))
+                        .foregroundStyle(theme.textColor.opacity(0.35))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("What the tutor has ready for this book")
+            .accessibilityLabel("Tutor readiness: \(briefing.summary)")
+
+            if model.isBriefingExpanded {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(briefing.items) { item in
+                        briefingItem(item)
+                    }
+                }
+                .padding(.top, 9)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func briefingItem(_ item: TutorBriefing.Item) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Group {
+                switch item.state {
+                case .ready:
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green.opacity(0.8))
+                case .working:
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(theme.textColor.opacity(0.5))
+                case .blocked:
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange.opacity(0.85))
+                case .off:
+                    Image(systemName: "minus.circle").foregroundStyle(theme.textColor.opacity(0.3))
+                }
+            }
+            .font(.system(size: 10))
+            .frame(width: 12)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.textColor.opacity(0.7))
+                Text(item.detail)
+                    .font(.caption2)
+                    .foregroundStyle(theme.textColor.opacity(0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
     // MARK: - Body states
 
     private var emptyState: some View {
@@ -329,6 +518,21 @@ struct TutorPanel: View {
                     .font(.callout)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
+
+                // Says where an answer could have come from. Retrieval that happens
+                // invisibly can't be checked — and when the tutor gets something wrong,
+                // this is what separates a bad answer from a badly chosen article.
+                if !message.references.isEmpty {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "book.closed")
+                            .font(.system(size: 9))
+                        Text("Looked up \(message.references.joined(separator: ", "))")
+                            .font(.caption2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(theme.textColor.opacity(0.4))
+                    .padding(.top, 1)
+                }
 
                 if let onSpeak, !model.isResponding || message.id != model.messages.last?.id {
                     let speakingThis = isSpeaking && model.speakingMessageID == message.id

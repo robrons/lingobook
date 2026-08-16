@@ -8,9 +8,7 @@ import SwiftUI
 struct BookCard: View {
     let book: Book
 
-    #if os(macOS)
     @State private var isHovered = false
-    #endif
 
     /// Only meaningful once you've actually opened the book — a "0%" on every unread
     /// cover would be noise.
@@ -27,22 +25,16 @@ struct BookCard: View {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
                 )
-            #if os(macOS)
                 .shadow(color: .black.opacity(isHovered ? 0.3 : 0.15), radius: isHovered ? 12 : 6, y: isHovered ? 6 : 3)
                 .scaleEffect(isHovered ? 1.03 : 1.0)
                 .animation(.easeOut(duration: 0.2), value: isHovered)
-            #else
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-            #endif
 
             Text(hasStarted ? "\(book.progressPercent)%" : " ")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-        #if os(macOS)
         .onHover { isHovered = $0 }
-        #endif
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(book.accessibilityDescription)

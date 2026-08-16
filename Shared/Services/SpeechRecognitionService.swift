@@ -109,18 +109,6 @@ private final class AudioSpeechEngine: @unchecked Sendable {
         request.shouldReportPartialResults = true
         recognitionRequest = request
 
-        #if os(iOS)
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            print("Audio session error: \(error)")
-            stoppedHandler?()
-            return
-        }
-        #endif
-
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
 

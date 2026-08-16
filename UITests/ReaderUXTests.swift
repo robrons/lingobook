@@ -12,8 +12,7 @@ import XCTest
 ///
 ///     UX_SCRIPT="shot:library;tapXY:0.1,0.25;wait:2;shot:opened;dump:reader"
 ///
-/// Artefacts land in the simulator's temporary directory, which the host reads back at
-/// `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/uxprobe/`.
+/// Artefacts land in `/tmp/uxprobe/`, alongside the `script.txt` that drives the run.
 final class ReaderUXTests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -25,7 +24,7 @@ final class ReaderUXTests: XCTestCase {
         outputDirectory = URL(fileURLWithPath: "/tmp/uxprobe", isDirectory: true)
         try? FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
-        app = XCUIApplication(bundleIdentifier: "com.lingobook.ipad")
+        app = XCUIApplication(bundleIdentifier: "com.lingobook.mac")
         app.launch()
     }
 
@@ -70,9 +69,6 @@ final class ReaderUXTests: XCTestCase {
             case "swipeRight":
                 app.swipeRight()
 
-            case "rotate":
-                rotate(to: argument)
-
             case "press":
                 // press:0.9,0.5,1.5 — a long press, for testing hold-to-select behaviour
                 let fields = argument.split(separator: ",").compactMap { Double($0) }
@@ -88,34 +84,15 @@ final class ReaderUXTests: XCTestCase {
 
     // MARK: - Steps
 
-    private func coordinate(x: Double, y: Double) -> XCUICoordinate {
-        app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
-    }
-
-    /// Rotates the device, and fails if the rotation did not actually happen.
+    /// A point inside the app's window, given as a fraction of its size.
     ///
-    /// Setting `XCUIDevice.orientation` against a simulator booted headless (no
-    /// Simulator.app) is accepted silently and then ignored — the window keeps its
-    /// portrait frame. A rotation step that quietly does nothing is worse than no step at
-    /// all, because the run still reports success while having exercised only portrait.
-    /// So this checks the window really changed shape and says so when it didn't.
-    private func rotate(to argument: String) {
-        let wantsLandscape = (argument == "landscape")
-        let before = app.frame.size
-
-        XCUIDevice.shared.orientation = wantsLandscape ? .landscapeLeft : .portrait
-        Thread.sleep(forTimeInterval: 2)
-
-        let after = app.frame.size
-        let isLandscape = after.width > after.height
-
-        XCTAssertEqual(
-            isLandscape, wantsLandscape,
-            """
-            Device did not rotate: \(before) → \(after). A headless simulator ignores \
-            orientation changes; boot Simulator.app to exercise landscape.
-            """
-        )
+    /// Anchored on the window rather than the application element: on the Mac the
+    /// application itself has no frame, and normalising against it yields an infinite
+    /// point that crashes the tap rather than missing it.
+    private func coordinate(x: Double, y: Double) -> XCUICoordinate {
+        let window = app.windows.firstMatch
+        let anchor: XCUIElement = window.waitForExistence(timeout: 5) ? window : app
+        return anchor.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
     }
 
     private func tapNormalized(_ argument: String) {

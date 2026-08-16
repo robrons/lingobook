@@ -2,11 +2,7 @@ import SwiftUI
 import CoreText
 import NaturalLanguage
 
-#if os(iOS)
-import UIKit
-#else
 import AppKit
-#endif
 
 /// Body text set the way a book sets it: justified, with hyphenation.
 ///
@@ -101,11 +97,7 @@ enum JustifiedTextStyle {
             .paragraphStyle: paragraphStyle
         ]
 
-        #if os(iOS)
-        attributes[.foregroundColor] = UIColor(color)
-        #else
         attributes[.foregroundColor] = NSColor(color)
-        #endif
 
         if let language = language(of: text) {
             attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language
@@ -116,38 +108,6 @@ enum JustifiedTextStyle {
 }
 
 // MARK: - Platform text view
-
-#if os(iOS)
-
-private struct JustifiedTextRepresentable: UIViewRepresentable {
-    let attributed: NSAttributedString
-
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
-        // A text view rather than a label so selection survives: pointing at a sentence and
-        // copying it is half of how this app gets used.
-        view.isEditable = false
-        view.isSelectable = true
-        view.isScrollEnabled = false
-        view.backgroundColor = .clear
-        view.textContainerInset = .zero
-        view.textContainer.lineFragmentPadding = 0
-        view.setContentCompressionResistancePriority(.required, for: .vertical)
-        return view
-    }
-
-    func updateUIView(_ view: UITextView, context: Context) {
-        view.attributedText = attributed
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0 else { return nil }
-        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: ceil(fitted.height))
-    }
-}
-
-#else
 
 private struct JustifiedTextRepresentable: NSViewRepresentable {
     let attributed: NSAttributedString
@@ -178,4 +138,3 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
     }
 }
 
-#endif

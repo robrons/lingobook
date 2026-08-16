@@ -12,13 +12,10 @@ struct ContentView: View {
                     ReaderView(book: book, navigationPath: $navigationPath)
                 }
         }
-        #if os(macOS)
         .background(TransparentWindowBackground())
-        #endif
     }
 }
 
-#if os(macOS)
 import AppKit
 
 /// Makes the window background transparent for vibrancy effect
@@ -36,7 +33,6 @@ struct TransparentWindowBackground: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
-#endif
 
 #Preview {
     ContentView()

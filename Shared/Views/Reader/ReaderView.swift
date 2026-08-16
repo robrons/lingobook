@@ -1,9 +1,7 @@
 import SwiftUI
 import SwiftData
 import Translation
-#if os(macOS)
 import AppKit
-#endif
 
 /// Main reader view - now a thin coordinator using extracted components
 struct ReaderView: View {
@@ -12,24 +10,19 @@ struct ReaderView: View {
     
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ReaderViewModel()
-    #if os(macOS)
     // The tutor keeps its own conversation, deliberately outside ReaderViewModel —
     // asking a question must never be able to move the reader's place in the book.
     @State private var tutor = TutorPanelModel()
     @State private var showTutor = false
     @State private var dictation = DictationService()
     @State private var pushToTalkMonitor: Any?
-    #endif
     
-    #if os(macOS)
     @State private var eventMonitor: Any?
-    #endif
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             readerSurface
 
-            #if os(macOS)
             if showTutor {
                 // Floats over the page rather than taking layout space. Taking space
                 // would narrow the column and repaginate — dropping a two-column spread
@@ -39,6 +32,7 @@ struct ReaderView: View {
                     model: tutor,
                     theme: viewModel.currentTheme,
                     context: tutorContext,
+                    briefing: tutorBriefing,
                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showTutor = false } },
                     listeningStatus: dictationStatus,
                     onSpeak: { viewModel.ttsService.speak($0) },
@@ -52,19 +46,32 @@ struct ReaderView: View {
                     // held: the first load downloads a few hundred megabytes, and
                     // discovering that mid-sentence would lose the sentence.
                     Task { await dictation.prepare() }
+                    // Checked on open so "Ollama isn't running" is on screen before a
+                    // question is wasted on finding it out.
+                    Task { await tutor.refreshEngineState() }
                 }
-                .onDisappear(perform: removePushToTalk)
+                // One model serves the tutor and the chapter summariser, and the reader
+                // is the one waiting. Background work stands aside for a live question.
+                .onChange(of: tutor.isResponding) { _, isResponding in
+                    viewModel.storySummarizer.isPaused = isResponding
+                    // An answer just loaded the weights, or just failed to; either way
+                    // the previous reading is now stale.
+                    if !isResponding { Task { await tutor.refreshEngineState() } }
+                }
+                .onDisappear {
+                    removePushToTalk()
+                    // Closing the panel mid-answer would otherwise leave the summariser
+                    // paused for the rest of the session.
+                    viewModel.storySummarizer.isPaused = false
+                }
                 // Height is the panel's own business — it collapses to a title bar
                 // when minimised.
                 .frame(width: 380)
                 .padding(24)
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
             }
-            #endif
         }
     }
-
-    #if os(macOS)
 
     /// Only offered while a download is actually pending — pointing at a folder is
     /// pointless once the weights are loaded.
@@ -152,12 +159,86 @@ struct ReaderView: View {
     private var tutorContext: TutorContext {
         TutorContext(
             bookTitle: book.title,
+            bookAuthor: book.author,
             chapterTitle: viewModel.currentChapterTitle,
             pageText: viewModel.currentPageContent.joined(separator: "\n\n"),
             pageID: "\(viewModel.currentChapterIndex)-\(viewModel.currentPageIndex)",
             position: readingPosition,
-            outline: chapterOutline
+            outline: chapterOutline,
+            language: book.language,
+            about: book.aboutBlock,
+            // Only the chapters behind the reader. A recap is worthless if it spoils the
+            // book, and this is where that guarantee is made.
+            storySoFar: viewModel.storySummarizer.storySoFar(before: viewModel.currentChapterIndex)
         )
+    }
+
+    /// Everything that has to be in place before the tutor is at its best, itemised.
+    private var tutorBriefing: TutorBriefing {
+        TutorBriefing(items: [engineItem, backgroundItem, storyItem, dictationItem])
+    }
+
+    /// The one that matters most: without Ollama there are no answers at all.
+    private var engineItem: TutorBriefing.Item {
+        let (state, detail): (TutorBriefing.Item.State, String) = switch tutor.engineState {
+        case .checking:   (.working, "Checking…")
+        case .notRunning: (.blocked, "Ollama isn't running — start it with “brew services start ollama”")
+        case .modelMissing: (.blocked, "Run “ollama pull \(Ollama.defaultModel)”")
+        case .cold:       (.ready, "\(Ollama.defaultModel) installed — first answer loads it into memory")
+        case .warm:       (.ready, "\(Ollama.defaultModel) loaded and ready")
+        }
+        return .init(id: "engine", title: "Local model", detail: detail, state: state)
+    }
+
+    private var backgroundItem: TutorBriefing.Item {
+        let (state, detail): (TutorBriefing.Item.State, String)
+        if !TutorSettings.wikipediaLookupEnabled {
+            (state, detail) = (.off, "Wikipedia lookup is off in Settings")
+        } else if book.aboutBlock != nil {
+            let both = book.aboutBook != nil && book.aboutAuthor != nil
+            (state, detail) = (.ready, both
+                ? "Wikipedia on this book and on \(book.author)"
+                : "Wikipedia on \(book.aboutBook != nil ? "this book" : book.author)")
+        } else if GroundingMonitor.shared.isFetching(book.id) {
+            (state, detail) = (.working, "Reading up on this book…")
+        } else if GroundingMonitor.shared.couldNotReachWikipedia(book.id) {
+            (state, detail) = (.blocked, "Couldn't reach Wikipedia — reopening the book retries")
+        } else if book.groundingAttemptedAt != nil {
+            // Final, and it has to say so, or the reader waits for something that is
+            // never coming.
+            (state, detail) = (.blocked, "No article matched this book — nothing more is loading")
+        } else {
+            (state, detail) = (.working, "Starting…")
+        }
+        return .init(id: "background", title: "Book background", detail: detail, state: state)
+    }
+
+    private var storyItem: TutorBriefing.Item {
+        let summarizer = viewModel.storySummarizer
+        let remembered = summarizer.rememberedChapters
+        let finished = viewModel.currentChapterIndex
+
+        let (state, detail): (TutorBriefing.Item.State, String)
+        if let writing = summarizer.writingChapter {
+            (state, detail) = (.working, "Writing up chapter \(writing + 1)…"
+                + (summarizer.queuedChapters > 0 ? " \(summarizer.queuedChapters) queued" : ""))
+        } else if remembered > 0 {
+            (state, detail) = (.ready, "Notes on \(remembered) of \(max(finished, remembered)) finished chapters")
+        } else if finished == 0 {
+            (state, detail) = (.ready, "Nothing to recap yet — notes start after your first chapter")
+        } else {
+            (state, detail) = (.blocked, "No chapter notes yet — “what's happened so far?” has only this page")
+        }
+        return .init(id: "story", title: "Story so far", detail: detail, state: state)
+    }
+
+    private var dictationItem: TutorBriefing.Item {
+        let (state, detail): (TutorBriefing.Item.State, String) = switch dictation.state {
+        case .preparing: (.working, "Fetching the speech model — one time, ~460 MB")
+        case .listening, .transcribing: (.ready, "Listening")
+        case .idle: (.ready, "Hold space to speak")
+        }
+        return .init(id: "dictation", title: "Dictation", detail: detail, state: state)
     }
 
     private var readingPosition: String {
@@ -199,21 +280,8 @@ struct ReaderView: View {
         return lines.joined(separator: "\n")
     }
 
-    #endif
-
-    /// Both are no-ops off the Mac, so the toolbar can pass them unconditionally.
-    private var isTutorVisible: Bool {
-        #if os(macOS)
-        showTutor
-        #else
-        false
-        #endif
-    }
-
     private func toggleTutor() {
-        #if os(macOS)
         withAnimation(.easeOut(duration: 0.2)) { showTutor.toggle() }
-        #endif
     }
 
     private var readerSurface: some View {
@@ -280,23 +348,18 @@ struct ReaderView: View {
                     .onAppear {
                         DisplaySleepPreventer.shared.preventSleep()
                         // Show the controls on arrival, then get out of the way — Books
-                        // settles to a bare page a moment after a book opens. Previously
-                        // only the Mac did this, so on iPad the toolbar and scrubber sat
-                        // over the text for the whole session.
+                        // settles to a bare page a moment after a book opens.
                         viewModel.noteChromeActivity()
                     }
-                    #if os(macOS)
                     // Mac has a pointer, so it can tell "reading" from "reaching for a
                     // control" without being asked. Any movement brings the chrome back.
                     .onContinuousHover { phase in
                         if case .active = phase { viewModel.noteChromeActivity() }
                     }
-                    #endif
                 }
             }
         }
         .preferredColorScheme(viewModel.currentTheme.colorScheme)
-        #if os(macOS)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden)
         .onAppear {
@@ -304,7 +367,19 @@ struct ReaderView: View {
                 guard !viewModel.showTOC, !viewModel.showThemeSettings else {
                     return event
                 }
-                
+
+                // The shortcut the toolbar button has advertised in its tooltip all
+                // along, and which nothing had ever actually implemented.
+                if event.modifierFlags.contains([.command, .shift]),
+                   event.charactersIgnoringModifiers?.lowercased() == "t" {
+                    toggleTutor()
+                    return nil
+                }
+
+                // Arrows move the caret when there's a question being typed. Without
+                // this, reaching back to fix a word in the composer turns the page.
+                guard !isEditingText else { return event }
+
                 if event.keyCode == 123 { // Left Arrow
                     viewModel.goToPreviousPage()
                     return nil
@@ -321,10 +396,6 @@ struct ReaderView: View {
                 eventMonitor = nil
             }
         }
-        #else
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        #endif
         .sheet(isPresented: $viewModel.showTOC) {
             TOCSheet(
                 tableOfContents: viewModel.tableOfContents,
@@ -346,7 +417,12 @@ struct ReaderView: View {
             await viewModel.translationService.performTranslation(using: session)
             viewModel.handleTranslationComplete()
         }
-        .task { await viewModel.loadBook(book: book) }
+        .task {
+            await viewModel.loadBook(book: book, modelContext: modelContext)
+            // Covers the whole existing library: a book imported before any of this
+            // simply grounds itself the first time it's opened.
+            BookGrounding.groundIfNeeded(book, modelContext: modelContext)
+        }
         .onChange(of: viewModel.currentPageIndex) { _, _ in
             viewModel.translateCurrentPage()
             viewModel.saveProgress(book: book, modelContext: modelContext)
@@ -364,6 +440,7 @@ struct ReaderView: View {
         .onDisappear {
             viewModel.ttsService.stop()
             viewModel.speechService.stopListening()
+            viewModel.storySummarizer.stop()
             viewModel.saveProgress(book: book, modelContext: modelContext)
             DisplaySleepPreventer.shared.allowSleep()
         }
@@ -389,7 +466,7 @@ struct ReaderView: View {
                 isListening: viewModel.speechService.isListening,
                 onToggleListening: { viewModel.speechService.toggleListening() },
                 showThemeSettings: $viewModel.showThemeSettings,
-                isTutorVisible: isTutorVisible,
+                isTutorVisible: showTutor,
                 onToggleTutor: toggleTutor
             )
             .popover(isPresented: $viewModel.showThemeSettings, arrowEdge: .top) {
@@ -452,14 +529,7 @@ struct ReaderView: View {
 
             // Mac reveals chrome by moving the pointer, so the middle has nothing to do
             // there — and a no-op tap target is just something else to hit.
-            #if os(iOS)
             Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { viewModel.toggleChrome() }
-                .accessibilityLabel("Show or hide controls")
-            #else
-            Color.clear
-            #endif
 
             Color.clear
                 .frame(width: size.width * 0.15)
@@ -497,16 +567,7 @@ struct ReaderView: View {
         if viewModel.layoutMode == .interleaved {
             interleavedSpread(width: geometry.size.width)
         } else {
-            #if os(iOS)
-            let isLandscape = geometry.size.width > geometry.size.height
-            if isLandscape {
-                horizontalSpread(width: geometry.size.width)
-            } else {
-                verticalSpread(height: geometry.size.height)
-            }
-            #else
             horizontalSpread(width: geometry.size.width)
-            #endif
         }
     }
     
@@ -566,44 +627,6 @@ struct ReaderView: View {
         }
     }
     
-    #if os(iOS)
-    private func verticalSpread(height: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            PageView(
-                columns: [viewModel.currentPageContent],
-                isOriginal: true,
-                chapterTitle: viewModel.currentChapterTitle,
-                translatedChapterTitle: viewModel.translatedChapterTitle,
-                isFirstPage: viewModel.currentPageIndex == 0,
-                fontSize: viewModel.fontSize,
-                theme: viewModel.currentTheme,
-                isTranslating: viewModel.translationService.isTranslating,
-                onTranslate: { text in
-                    viewModel.textToTranslate = text
-                    viewModel.showSystemTranslation = true
-                },
-                onCopy: { Clipboard.copy($0) }
-            )
-            .frame(height: height / 2)
-
-            Divider()
-
-            PageView(
-                columns: [viewModel.translatedPage],
-                isOriginal: false,
-                chapterTitle: viewModel.currentChapterTitle,
-                translatedChapterTitle: viewModel.translatedChapterTitle,
-                isFirstPage: viewModel.currentPageIndex == 0,
-                fontSize: viewModel.fontSize,
-                theme: viewModel.currentTheme,
-                isTranslating: viewModel.translationService.isTranslating,
-                onTranslate: { _ in },
-                onCopy: { Clipboard.copy($0) }
-            )
-            .frame(height: height / 2)
-        }
-    }
-    #endif
     
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -668,24 +691,17 @@ private struct TranslationErrorNotice: View {
     .modelContainer(for: Book.self, inMemory: true)
 }
 
-#if os(macOS)
 import IOKit.pwr_mgt
-#endif
 
 /// A utility to prevent the display from sleeping while the app is actively reading.
 @MainActor
 final class DisplaySleepPreventer {
     static let shared = DisplaySleepPreventer()
     
-    #if os(macOS)
     private var assertionID: IOPMAssertionID = 0
     private var isPreventing = false
-    #endif
     
     func preventSleep() {
-        #if os(iOS)
-        UIApplication.shared.isIdleTimerDisabled = true
-        #elseif os(macOS)
         guard !isPreventing else { return }
         
         let reasonForActivity = "Reading Book in LingoBook" as CFString
@@ -702,17 +718,12 @@ final class DisplaySleepPreventer {
             assertionID = newAssertionID
             isPreventing = true
         }
-        #endif
     }
     
     func allowSleep() {
-        #if os(iOS)
-        UIApplication.shared.isIdleTimerDisabled = false
-        #elseif os(macOS)
         guard isPreventing else { return }
         
         IOPMAssertionRelease(assertionID)
         isPreventing = false
-        #endif
     }
 }

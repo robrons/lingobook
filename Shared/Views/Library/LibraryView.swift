@@ -2,9 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-#if os(macOS)
 import AppKit
-#endif
 
 /// How the shelf is ordered. Persisted, because a sort you have to re-pick every launch
 /// isn't really a preference.
@@ -46,11 +44,6 @@ struct LibraryView: View {
     @State private var showError = false
     /// Title of a book the reader tried to import twice. Not an error — just a nudge.
     @State private var duplicateTitle: String?
-
-    #if os(iOS)
-    @State private var showFilePicker = false
-    @State private var showSettings = false
-    #endif
 
     private let epubService = EPUBService()
 
@@ -106,13 +99,8 @@ struct LibraryView: View {
 
     var body: some View {
         ZStack {
-            #if os(iOS)
-            Color(uiColor: .systemGroupedBackground)
-                .ignoresSafeArea()
-            #else
             VisualEffectBackground()
                 .ignoresSafeArea()
-            #endif
 
             if books.isEmpty {
                 emptyLibrary
@@ -125,7 +113,6 @@ struct LibraryView: View {
         .navigationTitle("Library")
         .searchable(text: $searchText, prompt: "Search by title or author")
         .toolbar { toolbarContent }
-        #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { providers in
             handleDrop(providers: providers)
@@ -133,26 +120,6 @@ struct LibraryView: View {
         .overlay {
             if isDragging { dropTarget }
         }
-        #endif
-        #if os(iOS)
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [.epub],
-            allowsMultipleSelection: false
-        ) { result in
-            handleFileImport(result: result)
-        }
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showSettings = false }
-                        }
-                    }
-            }
-        }
-        #endif
         .alert("Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
@@ -188,14 +155,6 @@ struct LibraryView: View {
             }
             .help("Sort your library")
         }
-
-        #if os(iOS)
-        ToolbarItem(placement: .primaryAction) {
-            Button { showSettings = true } label: {
-                Label("Settings", systemImage: "gearshape")
-            }
-        }
-        #endif
 
         ToolbarItem(placement: .primaryAction) {
             Button(action: startImport) {
@@ -260,7 +219,13 @@ struct LibraryView: View {
 
     private func deleteButton(for book: Book) -> some View {
         Button(role: .destructive) {
-            withAnimation { modelContext.delete(book) }
+            withAnimation {
+                // The chapter summaries are keyed to the book by id, not by a SwiftData
+                // relationship, so nothing cascades — they'd outlive the book they
+                // describe and quietly accumulate.
+                BookGrounding.deleteSummaries(for: book, modelContext: modelContext)
+                modelContext.delete(book)
+            }
         } label: {
             Label("Delete", systemImage: "trash")
         }
@@ -277,7 +242,6 @@ struct LibraryView: View {
         }
     }
 
-    #if os(macOS)
     /// Only appears mid-drag. The rest of the time the shelf speaks for itself.
     private var dropTarget: some View {
         ZStack {
@@ -300,7 +264,6 @@ struct LibraryView: View {
         .animation(.easeInOut(duration: 0.15), value: isDragging)
         .allowsHitTesting(false)
     }
-    #endif
 
     private var loadingOverlay: some View {
         ZStack {
@@ -321,14 +284,9 @@ struct LibraryView: View {
     // MARK: - Actions
 
     private func startImport() {
-        #if os(iOS)
-        showFilePicker = true
-        #else
         openFilePicker()
-        #endif
     }
 
-    #if os(macOS)
     private func openFilePicker() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.epub]
@@ -352,29 +310,6 @@ struct LibraryView: View {
         }
         return true
     }
-    #endif
-
-    #if os(iOS)
-    private func handleFileImport(result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            if let url = urls.first {
-                guard url.startAccessingSecurityScopedResource() else {
-                    errorMessage = "Unable to access the selected file"
-                    showError = true
-                    return
-                }
-                Task {
-                    await loadBook(from: url)
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-        case .failure(let error):
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-    #endif
 
     private func loadBook(from url: URL) async {
         isLoading = true
@@ -395,11 +330,17 @@ struct LibraryView: View {
                 title: content.title,
                 author: content.author,
                 epubData: data,
-                coverData: content.coverData
+                coverData: content.coverData,
+                language: content.language
             )
 
             modelContext.insert(book)
             try modelContext.save()
+
+            // One request per book, ever. From here on the tutor can answer questions
+            // about the book's history and its author from something better than an 8B
+            // model's recollection — and it works offline afterwards.
+            BookGrounding.groundIfNeeded(book, modelContext: modelContext)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -485,15 +426,9 @@ struct BookCover: View {
 
     var body: some View {
         if let coverImage = book.coverImage {
-            #if os(iOS)
-            Image(uiImage: coverImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-            #else
             Image(nsImage: coverImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-            #endif
         } else {
             // Books' treatment of a coverless book: a solid tinted board with the title
             // set on it in serif caps, so the cover itself says which book this is. The
@@ -541,7 +476,6 @@ struct BookCover: View {
 
 // MARK: - Visual Effect Background (macOS only)
 
-#if os(macOS)
 struct VisualEffectBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
@@ -554,7 +488,6 @@ struct VisualEffectBackground: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
-#endif
 
 #Preview {
     NavigationStack {

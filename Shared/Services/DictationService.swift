@@ -1,6 +1,5 @@
 import Foundation
 
-#if os(macOS)
 import AVFoundation
 import FluidAudio
 
@@ -274,4 +273,3 @@ final class DictationService {
         return url
     }
 }
-#endif

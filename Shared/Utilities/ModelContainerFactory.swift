@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Builds the app's SwiftData container. Shared by the macOS and iPadOS entry points.
+/// Builds the app's SwiftData container.
 ///
 /// If the store cannot be opened — a failed migration, a corrupt file — the existing
 /// store is moved aside as a timestamped backup rather than deleted, so a schema change
@@ -10,7 +10,7 @@ enum ModelContainerFactory {
 
     @MainActor
     static func makeContainer() -> ModelContainer {
-        let schema = Schema([Book.self])
+        let schema = Schema([Book.self, ChapterSummary.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

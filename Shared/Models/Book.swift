@@ -25,12 +25,48 @@ final class Book {
     var savedThemeName: String
     var savedLayoutMode: String
 
-    init(title: String, author: String, epubData: Data, coverData: Data? = nil) {
+    // MARK: - What the tutor knows about this book
+
+    /// The book's own language, from the EPUB's `<dc:language>`.
+    ///
+    /// The parser has always read this and then dropped it. The tutor needs it to pick a
+    /// Wikipedia to fall back to, and to stop asserting that every page is French.
+    var language: String?
+
+    /// Wikipedia's account of the book and of its author, fetched once at import.
+    ///
+    /// Stored rather than looked up per question: it never changes, and a reader who is
+    /// offline on a train should still get the publication history right.
+    var aboutBook: String?
+    var aboutAuthor: String?
+    /// The article URLs behind the two fields above, newline-separated. Attribution, and
+    /// the beginning of a way to refresh a bad match.
+    var aboutSources: String?
+    /// When grounding was last attempted, successfully or not. Stops a book with no
+    /// Wikipedia article from asking again on every single open.
+    var groundingAttemptedAt: Date?
+
+    /// Everything that happened before the recent chapters, folded into one paragraph.
+    ///
+    /// See `StorySummarizer`: without compaction a long book's recap grows until it
+    /// crowds out the page the reader is on.
+    var storyDigest: String?
+    /// The last chapter index the digest covers. -1 means nothing has been folded in yet.
+    var digestThroughChapter: Int = -1
+
+    init(
+        title: String,
+        author: String,
+        epubData: Data,
+        coverData: Data? = nil,
+        language: String? = nil
+    ) {
         self.id = UUID()
         self.title = title
         self.author = author
         self.epubData = epubData
         self.coverData = coverData
+        self.language = language
         self.dateAdded = Date()
         self.currentChapterIndex = 0
         self.currentPageIndex = 0
@@ -64,6 +100,19 @@ final class Book {
     /// Progress as a whole percent, for display.
     var progressPercent: Int {
         Int((readingProgress * 100).rounded())
+    }
+
+    /// The background the tutor is given about this book, or nil when the lookup found
+    /// nothing it was confident about.
+    var aboutBlock: String? {
+        var parts: [String] = []
+        if let aboutBook, !aboutBook.isEmpty {
+            parts.append("About “\(title)”: \(aboutBook)")
+        }
+        if let aboutAuthor, !aboutAuthor.isEmpty {
+            parts.append("About \(author): \(aboutAuthor)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
     /// How the book announces itself to VoiceOver.

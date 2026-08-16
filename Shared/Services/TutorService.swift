@@ -8,6 +8,7 @@ import NaturalLanguage
 /// surrounding clause is guesswork.
 struct TutorContext: Sendable {
     let bookTitle: String
+    let bookAuthor: String
     let chapterTitle: String
     let pageText: String
     /// Identifies which page this is, so a turned page can be noticed mid-conversation.
@@ -25,6 +26,25 @@ struct TutorContext: Sendable {
     /// A larger model would recall the book better and still be guessing about *this*
     /// copy of it.
     let outline: String
+
+    /// The book's own language, as a BCP-47 code from the EPUB's metadata.
+    var language: String?
+
+    /// Wikipedia on this book and its author, fetched once when the book was imported.
+    ///
+    /// The model does not contain this. Asked when the novel was published or how it was
+    /// received, an 8B model produces fluent, plausible, wrong dates — and a reader who
+    /// came to the tutor precisely because they didn't know has no way to catch it.
+    var about: String?
+
+    /// What has happened in the chapters the reader has actually finished.
+    var storySoFar: String?
+
+    /// Encyclopedia notes for this one question, resolved just before it was sent.
+    ///
+    /// Per-question rather than standing, so it travels with the turn it belongs to and
+    /// ages out of the conversation naturally.
+    var references: String?
 }
 
 struct TutorMessage: Identifiable, Sendable, Equatable {
@@ -38,6 +58,9 @@ struct TutorMessage: Identifiable, Sendable, Equatable {
     let id: UUID
     let role: Role
     var text: String
+
+    /// Wikipedia articles this reply had in front of it, shown beneath it.
+    var references: [String] = []
 
     /// Markers shown in the transcript but never sent to the model.
     var isNote: Bool { role == .note }
@@ -71,6 +94,7 @@ enum TutorError: LocalizedError {
     case notRunning
     case modelMissing(String)
     case badResponse(Int)
+    case modelSaid(String)
 
     var errorDescription: String? {
         switch self {
@@ -80,6 +104,162 @@ enum TutorError: LocalizedError {
             return "The model “\(model)” isn't installed. Run “ollama pull \(model)”."
         case .badResponse(let code):
             return "The local model returned an unexpected response (HTTP \(code))."
+        case .modelSaid(let message):
+            return "The local model stopped: \(message)"
+        }
+    }
+}
+
+// MARK: - Ollama plumbing
+
+/// The wire format and connection details, shared by everything that talks to Ollama.
+///
+/// The tutor streams; the chapter summariser doesn't. Both want the same model, the same
+/// endpoint, and the same keep-alive, and neither should own the definition of them.
+enum Ollama {
+
+    static let defaultModel = "ministral-3:8b"
+    static let chatEndpoint = URL(string: "http://localhost:11434/api/chat")!
+
+    /// Ollama drops a model from memory after about five idle minutes. A reader who asks
+    /// a question every ten minutes would then pay the several-second cold start every
+    /// single time — indistinguishable, from the outside, from an app that is simply
+    /// slow. Each request pushes the eviction back out to half an hour.
+    static let keepAlive = "30m"
+
+    struct Message: Encodable, Sendable {
+        let role: String
+        let content: String
+    }
+
+    struct Options: Encodable, Sendable {
+        var num_ctx: Int?
+        var temperature: Double?
+    }
+
+    struct ChatRequest: Encodable, Sendable {
+        let model: String
+        let messages: [Message]
+        let stream: Bool
+        let options: Options
+        let keep_alive: String
+    }
+
+    /// One streamed chunk, or an entire non-streamed reply — the shapes agree.
+    struct ChatChunk: Decodable, Sendable {
+        struct Content: Decodable, Sendable { let content: String? }
+        let message: Content?
+        let done: Bool?
+        /// Ollama reports mid-stream failures as an ordinary line with this field set.
+        /// Without decoding it, a model that fails to load surfaces to the reader as a
+        /// raw Swift `DecodingError` about a missing key.
+        let error: String?
+    }
+
+    static func request(
+        messages: [Message],
+        model: String,
+        endpoint: URL,
+        stream: Bool,
+        contextTokens: Int,
+        temperature: Double? = nil,
+        timeout: TimeInterval
+    ) throws -> URLRequest {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            ChatRequest(
+                model: model,
+                messages: messages,
+                stream: stream,
+                options: Options(num_ctx: contextTokens, temperature: temperature),
+                keep_alive: keepAlive
+            )
+        )
+        request.timeoutInterval = timeout
+        return request
+    }
+
+    /// Whether the thing that answers questions is actually there.
+    ///
+    /// The tutor's single biggest failure — Ollama not running — used to be discoverable
+    /// only by asking a question and reading the error afterwards. This lets the panel
+    /// say so up front, before a question is wasted on it.
+    enum EngineState: Equatable {
+        case checking
+        case notRunning
+        case modelMissing
+        /// Installed, but not in memory: the next answer pays the cold-start wait.
+        case cold
+        case warm
+    }
+
+    static func engineState(model: String = defaultModel) async -> EngineState {
+        func names(_ path: String) async throws -> [String] {
+            var request = URLRequest(url: URL(string: "http://localhost:11434\(path)")!)
+            request.timeoutInterval = 3
+            let (data, _) = try await URLSession.shared.data(for: request)
+            struct Listing: Decodable {
+                struct Entry: Decodable { let name: String }
+                let models: [Entry]
+            }
+            return (try JSONDecoder().decode(Listing.self, from: data)).models.map(\.name)
+        }
+
+        guard let installed = try? await names("/api/tags") else { return .notRunning }
+        guard installed.contains(model) else { return .modelMissing }
+        // /api/ps lists what is loaded in memory right now, which is the difference
+        // between an answer starting in a second and in twenty.
+        let loaded = (try? await names("/api/ps")) ?? []
+        return loaded.contains(model) ? .warm : .cold
+    }
+
+    /// Maps the errors worth explaining; everything else passes through untouched.
+    static func translate(_ error: any Error) -> any Error {
+        if let urlError = error as? URLError,
+           urlError.code == .cannotConnectToHost || urlError.code == .cannotFindHost {
+            return TutorError.notRunning
+        }
+        return error
+    }
+
+    /// One complete reply, no streaming.
+    ///
+    /// For work with no reader waiting on it — summarising a finished chapter — where a
+    /// token-by-token stream would be pure ceremony.
+    static func complete(
+        system: String,
+        user: String,
+        model: String = defaultModel,
+        endpoint: URL = chatEndpoint,
+        contextTokens: Int = 16_384,
+        temperature: Double = 0.2,
+        timeout: TimeInterval = 180
+    ) async throws -> String {
+        let request = try request(
+            messages: [Message(role: "system", content: system),
+                       Message(role: "user", content: user)],
+            model: model,
+            endpoint: endpoint,
+            stream: false,
+            contextTokens: contextTokens,
+            temperature: temperature,
+            timeout: timeout
+        )
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                throw http.statusCode == 404
+                    ? TutorError.modelMissing(model)
+                    : TutorError.badResponse(http.statusCode)
+            }
+            let chunk = try JSONDecoder().decode(ChatChunk.self, from: data)
+            if let error = chunk.error { throw TutorError.modelSaid(error) }
+            return (chunk.message?.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            throw translate(error)
         }
     }
 }
@@ -99,14 +279,25 @@ struct OllamaTutor: TutorService {
     /// cost is a larger KV cache in memory, which on this model is a few hundred MB.
     let contextTokens: Int
 
+    /// How many earlier turns travel with a question.
+    ///
+    /// The transcript used to be resent in full, forever. Past the context window Ollama
+    /// truncates silently and it truncates from the *top* — which is where the system
+    /// prompt lives. So the longest, most involved conversations were exactly the ones
+    /// that quietly lost their instructions, their outline, and now their background and
+    /// story-so-far. The panel still shows everything; only what's sent is bounded.
+    let historyTurns: Int
+
     init(
-        model: String = "ministral-3:8b",
-        endpoint: URL = URL(string: "http://localhost:11434/api/chat")!,
-        contextTokens: Int = 16_384
+        model: String = Ollama.defaultModel,
+        endpoint: URL = Ollama.chatEndpoint,
+        contextTokens: Int = 16_384,
+        historyTurns: Int = 12
     ) {
         self.model = model
         self.endpoint = endpoint
         self.contextTokens = contextTokens
+        self.historyTurns = historyTurns
     }
 
     // MARK: - Prompt
@@ -129,51 +320,97 @@ struct OllamaTutor: TutorService {
     /// French. Detection happens here, on device, and the instruction is stated as a
     /// fact — which it follows. Ambiguous or very short input falls back to English,
     /// since that is what a reader of an English-language app expects by default.
-    private func languageInstruction(for question: String) -> String {
+    private func languageInstruction(for question: String, context: TutorContext) -> String {
+        let code = (context.language ?? "fr").split(separator: "-").first.map(String.init) ?? "fr"
+        let bookLanguage = NLLanguage(code)
+        let name = Locale.current.localizedString(forLanguageCode: code) ?? "the book's language"
+
+        guard bookLanguage != .english else {
+            return "Reply in English."
+        }
+
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(question)
-        let french = recognizer.languageHypotheses(withMaximum: 3)[.french] ?? 0
+        let score = recognizer.languageHypotheses(withMaximum: 3)[bookLanguage] ?? 0
 
-        if french > 0.6 {
+        if score > 0.6 {
             return """
-            The reader wrote to you in French — they are practising the language. Reply \
-            in French, pitched at the level they wrote at. Do not switch to English to \
+            The reader wrote to you in \(name) — they are practising the language. Reply \
+            in \(name), pitched at the level they wrote at. Do not switch to English to \
             be helpful.
             """
         }
 
-        return "The reader wrote to you in English. Reply in English, even though the page is French."
+        return "The reader wrote to you in English. Reply in English, even though the page is in \(name)."
     }
 
     private func systemPrompt(for context: TutorContext, question: String) -> String {
-        let languageInstruction = languageInstruction(for: question)
-        return """
-        You are helping someone read “\(context.bookTitle)”. They are on the page below \
-        and can see it; so can you. The current chapter is “\(context.chapterTitle)” — \
-        \(context.position).
+        var sections: [String] = []
 
+        sections.append("""
+        You are helping someone read “\(context.bookTitle)” by \(context.bookAuthor). They \
+        are on the page below and can see it; so can you. The current chapter is \
+        “\(context.chapterTitle)” — \(context.position).
+        """)
+
+        sections.append("""
         Where they are in the book, with ▸ marking the chapter they are reading. \
         Anything above it they have already read; anything below is still to come. When \
         they ask where to skip to or what is coming, answer from this list and name the \
         chapter, never from general knowledge of the book:
         \(context.outline)
+        """)
 
+        // Reference material first, instructions after — so what the model is told to do
+        // sits closest to the question it has to do it to.
+        if let about = context.about {
+            sections.append("""
+            Background on this book, from Wikipedia. Where it disagrees with what you \
+            remember, it is right and you are wrong:
+            \(about)
+            """)
+        }
+
+        if let storySoFar = context.storySoFar {
+            sections.append("""
+            What has happened so far, taken only from the chapters this reader has \
+            actually finished. When they ask what has happened, or who someone is, answer \
+            from this — never add events from your own memory of the book:
+            \(storySoFar)
+            """)
+        }
+
+        sections.append("""
         Answer whatever they ask about this page — what a word means, what just happened, \
         who someone is, a translation, the history behind a reference. Keep it short \
         unless they ask for depth.
+        """)
 
-        \(languageInstruction)
+        // Everything above the reader's position is fair game; everything below is the
+        // book being spoiled by the thing that was supposed to help them read it.
+        sections.append("""
+        Don't reveal what happens after where they are now. If they ask you to guess \
+        what comes next, speculate from what they have read and say plainly that you are \
+        speculating. If they ask outright how it ends, warn them before you answer.
+        """)
 
+        sections.append(languageInstruction(for: question, context: context))
+
+        sections.append("""
         Do not correct their spelling or grammar, and do not turn an answer into a \
         language lesson. If they want grammar explained they will ask; until then, just \
         answer the question.
+        """)
 
-        If you are not certain, say so plainly instead of guessing.
+        sections.append("If you are not certain, say so plainly instead of guessing.")
 
+        sections.append("""
         Earlier questions in this conversation may have been about a different page. \
         The page quoted alongside the reader's latest question is the one in front of \
         them now — answer about that one.
-        """
+        """)
+
+        return sections.joined(separator: "\n\n")
     }
 
     /// The reader's question with the page attached to it.
@@ -186,14 +423,23 @@ struct OllamaTutor: TutorService {
     /// Only the newest turn carries it. Repeating the page on every historical turn
     /// would trade the bug for a context window full of duplicated text.
     private func questionWithPage(_ question: String, context: TutorContext) -> String {
-        """
-        The page in front of me right now, from “\(context.chapterTitle)”:
-        \"\"\"
-        \(context.pageText)
-        \"\"\"
+        var parts = [
+            """
+            The page in front of me right now, from “\(context.chapterTitle)”:
+            \"\"\"
+            \(context.pageText)
+            \"\"\"
+            """
+        ]
 
-        \(question)
-        """
+        // Between the page and the question: close enough to the question to be used,
+        // far enough from it that the question is still the last thing read.
+        if let references = context.references {
+            parts.append(references)
+        }
+
+        parts.append(question)
+        return parts.joined(separator: "\n\n")
     }
 
     // MARK: - Streaming
@@ -206,35 +452,38 @@ struct OllamaTutor: TutorService {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    var wire: [WireMessage] = [
-                        WireMessage(role: "system", content: systemPrompt(for: context, question: question))
+                    var wire: [Ollama.Message] = [
+                        Ollama.Message(
+                            role: "system",
+                            content: systemPrompt(for: context, question: question)
+                        )
                     ]
                     wire += history
                         .filter { !$0.isNote }
+                        .suffix(historyTurns)
                         .map {
-                            WireMessage(
+                            Ollama.Message(
                                 role: $0.role == .reader ? "user" : "assistant",
                                 content: $0.text
                             )
                         }
                     wire.append(
-                        WireMessage(role: "user", content: questionWithPage(question, context: context))
-                    )
-
-                    var request = URLRequest(url: endpoint)
-                    request.httpMethod = "POST"
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONEncoder().encode(
-                        ChatRequest(
-                            model: model,
-                            messages: wire,
-                            stream: true,
-                            options: .init(num_ctx: contextTokens)
+                        Ollama.Message(
+                            role: "user",
+                            content: questionWithPage(question, context: context)
                         )
                     )
+
                     // Generous: the first request after a cold start pays for loading
                     // several gigabytes of weights into memory before a token appears.
-                    request.timeoutInterval = 180
+                    let request = try Ollama.request(
+                        messages: wire,
+                        model: model,
+                        endpoint: endpoint,
+                        stream: true,
+                        contextTokens: contextTokens,
+                        timeout: 180
+                    )
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
 
@@ -248,48 +497,23 @@ struct OllamaTutor: TutorService {
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
                         guard !line.isEmpty, let data = line.data(using: .utf8) else { continue }
-                        let chunk = try JSONDecoder().decode(ChatChunk.self, from: data)
+                        let chunk = try JSONDecoder().decode(Ollama.ChatChunk.self, from: data)
+                        if let error = chunk.error { throw TutorError.modelSaid(error) }
                         if let piece = chunk.message?.content, !piece.isEmpty {
                             continuation.yield(piece)
                         }
-                        if chunk.done { break }
+                        if chunk.done == true { break }
                     }
 
                     continuation.finish()
                 } catch is CancellationError {
                     continuation.finish()
-                } catch let error as URLError where error.code == .cannotConnectToHost
-                    || error.code == .cannotFindHost {
-                    continuation.finish(throwing: TutorError.notRunning)
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: Ollama.translate(error))
                 }
             }
 
             continuation.onTermination = { _ in task.cancel() }
         }
-    }
-
-    // MARK: - Wire format
-
-    private struct WireMessage: Encodable {
-        let role: String
-        let content: String
-    }
-
-    private struct ChatRequest: Encodable {
-        struct Options: Encodable {
-            let num_ctx: Int
-        }
-        let model: String
-        let messages: [WireMessage]
-        let stream: Bool
-        let options: Options
-    }
-
-    private struct ChatChunk: Decodable {
-        struct Message: Decodable { let content: String? }
-        let message: Message?
-        let done: Bool
     }
 }
