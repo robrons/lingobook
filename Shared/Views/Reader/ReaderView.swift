@@ -85,8 +85,12 @@ struct ReaderView: View {
         case .listening: "Listening — release space to send"
         case .transcribing: "Transcribing…"
         // The first run fetches a few hundred megabytes with no progress to report,
-        // which looks identical to a hang unless the wait is named.
-        case .preparing: "Fetching the speech model — one time, ~460 MB…"
+        // which looks identical to a hang unless the wait is named. Every run after
+        // that just reads the same files off disk, and saying "460 MB" there would
+        // promise a wait that isn't coming.
+        case .preparing: dictation.willDownload
+            ? "Fetching the speech model — one time, ~460 MB…"
+            : "Warming up the speech model…"
         case .idle: nil
         }
     }
@@ -234,7 +238,9 @@ struct ReaderView: View {
 
     private var dictationItem: TutorBriefing.Item {
         let (state, detail): (TutorBriefing.Item.State, String) = switch dictation.state {
-        case .preparing: (.working, "Fetching the speech model — one time, ~460 MB")
+        case .preparing: (.working, dictation.willDownload
+            ? "Fetching the speech model — one time, ~460 MB"
+            : "Warming up the speech model")
         case .listening, .transcribing: (.ready, "Listening")
         case .idle: (.ready, "Hold space to speak")
         }

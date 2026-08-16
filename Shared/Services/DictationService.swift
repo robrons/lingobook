@@ -142,6 +142,12 @@ final class DictationService {
     private let capture = AudioCapture()
     private var asr: AsrManager?
 
+    /// The single in-flight load, so simultaneous askers wait on one instead of
+    /// each starting another. Releasing the space bar while the panel's own warm-up
+    /// was still running used to begin a *second* full model bring-up and block the
+    /// transcript behind it.
+    private var loading: Task<AsrManager?, Never>?
+
     /// Where a shared copy of the weights lives, if the reader has pointed us at one.
     ///
     /// The sandbox rewrites this app's Application Support to its own container, so a
@@ -152,35 +158,100 @@ final class DictationService {
 
     // MARK: - Model
 
-    /// True when weights must be fetched because no shared folder has been granted.
-    var willDownload: Bool { asr == nil && sharedModelFolder == nil }
+    /// True when the ~460MB really does have to come down the wire.
+    ///
+    /// Asked so the wait can be named honestly: a first-ever fetch and a half-second
+    /// read from disk both put us in `.preparing`, and telling the reader to expect
+    /// 460MB when the file is already there reads as a hang that never comes.
+    var willDownload: Bool {
+        guard asr == nil, sharedModelFolder == nil else { return false }
+        let cached = try? FileManager.default.contentsOfDirectory(
+            atPath: AsrModels.defaultCacheDirectory(for: .v3).path
+        )
+        return cached?.isEmpty ?? true
+    }
 
-    /// Loads the model. Safe to call repeatedly.
+    /// Loads the model. Safe to call repeatedly, and from several places at once.
     ///
     /// Explicitly v3. `UnifiedAsrManager` has the friendlier API — plain samples in,
     /// string out, no decoder state — but its only weights are
     /// `parakeet-unified-en-0.6b`, which is English-only. Multilingual recognition is
     /// the entire reason for using Parakeet here.
     func prepare() async {
-        guard asr == nil else { return }
-        state = .preparing
-        do {
-            let models: AsrModels
-            if let folder = sharedModelFolder {
-                let accessed = folder.startAccessingSecurityScopedResource()
-                defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
-                models = try await AsrModels.load(from: folder, version: .v3)
-            } else {
-                models = try await AsrModels.downloadAndLoad(version: .v3)
-            }
+        _ = await loadedManager()
+    }
 
+    /// The model, loading it if this is the first ask and joining the load already
+    /// running if it isn't.
+    private func loadedManager() async -> AsrManager? {
+        if let asr { return asr }
+        if let loading { return await loading.value }
+
+        // Left alone mid-utterance: the status line is already saying "Transcribing…",
+        // and replacing that with "preparing" would be a step backwards on screen.
+        if state == .idle { state = .preparing }
+
+        let task = Task { await self.load() }
+        loading = task
+        let manager = await task.value
+        loading = nil
+        if state == .preparing { state = .idle }
+        return manager
+    }
+
+    private func load() async -> AsrManager? {
+        do {
+            let models = try await weights()
             let manager = AsrManager(config: .default)
             try await manager.loadModels(models)
+            await Self.warmUp(manager)
             asr = manager
-            state = .idle
+            return manager
         } catch {
             errorMessage = "Couldn't load the speech model: \(error.localizedDescription)"
-            state = .idle
+            return nil
+        }
+    }
+
+    /// Reads the weights, and this choice of call is the whole fix for the wait after
+    /// the space bar comes up.
+    ///
+    /// `downloadAndLoad` is the obvious one and the wrong one. Before it will hand back
+    /// files it can already see, it re-verifies all four model bundles against
+    /// HuggingFace — measured here at 167 seconds, against 0.4s for `loadFromCache`
+    /// reading the very same files. It bought nothing, because the weights are pinned
+    /// to v3 and never change under us, and it charged the reader the entire gap
+    /// between releasing space and seeing their words.
+    ///
+    /// `loadFromCache` still fetches anything genuinely missing, so it covers the first
+    /// run too; it just declines to ask the network about files already on the disk.
+    private func weights() async throws -> AsrModels {
+        if let folder = sharedModelFolder {
+            let accessed = folder.startAccessingSecurityScopedResource()
+            defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
+            return try await AsrModels.load(from: folder, version: .v3)
+        }
+
+        if let cached = try? await AsrModels.loadFromCache(version: .v3) {
+            return cached
+        }
+
+        // Only reached when that failed outright — a fetch interrupted half way, say.
+        // This is the call that repairs a broken folder, so it is worth the wait here.
+        return try await AsrModels.downloadAndLoad(version: .v3)
+    }
+
+    /// One throwaway pass over silence, so Core ML instantiates the Neural Engine
+    /// program now rather than inside the reader's first question. Loading the model
+    /// does not compile it; the first `transcribe` does.
+    private static func warmUp(_ manager: AsrManager) async {
+        do {
+            var decoderState = try TdtDecoderState()
+            let silence = [Float](repeating: 0, count: Int(AudioCapture.sampleRate / 2))
+            _ = try await manager.transcribe(silence, decoderState: &decoderState)
+        } catch {
+            // Nothing is lost by a warm-up that fails: the next real utterance simply
+            // pays the instantiation it would have paid anyway.
         }
     }
 
@@ -211,8 +282,7 @@ final class DictationService {
         state = .transcribing
         defer { state = .idle }
 
-        if asr == nil { await prepare() }
-        guard let asr else { return "" }
+        guard let asr = await loadedManager() else { return "" }
 
         do {
             // A fresh state per utterance: each press is its own sentence, not a
@@ -244,6 +314,9 @@ final class DictationService {
             )
             UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
             asr = nil
+            // A load already running is reading from the wrong place now.
+            loading?.cancel()
+            loading = nil
             await prepare()
         } catch {
             errorMessage = "Couldn't keep access to that folder: \(error.localizedDescription)"
