@@ -62,20 +62,8 @@ final class ReaderViewModel {
     }
     var viewSize: CGSize = CGSize(width: 800, height: 600)
     
-    /// iPad in portrait stacks the original above the translation instead of placing them
-    /// side by side, so each page gets half the *height* and the full width. Mirrors the
-    /// `isLandscape` test in `ReaderView.pageSpread` — if one changes, so must the other.
-    var isVerticalSpread: Bool {
-        #if os(iOS)
-        return layoutMode != .interleaved && viewSize.width <= viewSize.height
-        #else
-        return false
-        #endif
-    }
-
     var availableContentHeight: CGFloat {
-        let usable = isVerticalSpread ? viewSize.height / 2 : viewSize.height
-        return max(100, usable - ReaderLayout.totalVerticalInset)
+        max(100, viewSize.height - ReaderLayout.totalVerticalInset)
     }
 
     /// Columns of text on one page.
@@ -91,7 +79,7 @@ final class ReaderViewModel {
     /// a wide window; `PageView` applies the same cap, so measurement matches rendering.
     var availableContentWidth: CGFloat {
         let inner: CGFloat
-        if layoutMode == .interleaved || isVerticalSpread {
+        if layoutMode == .interleaved {
             inner = viewSize.width - ReaderLayout.horizontalPadding * 2
         } else {
             inner = viewSize.width / 2 - ReaderLayout.horizontalPadding * 2
@@ -113,6 +101,11 @@ final class ReaderViewModel {
     var speechService = SpeechRecognitionService()
     var isAutoReading = false
     private var pendingAutoReadAfterTranslation = false
+
+    /// Writes down each chapter as the reader finishes it, so the tutor can answer
+    /// "what's happened so far?" from this reading rather than from a vague memory of
+    /// the novel. Lives here because this is what knows when a chapter ends.
+    let storySummarizer = StorySummarizer()
     /// The texts behind the translation currently on screen, so we don't ask twice.
     private var lastTranslationRequest: [String] = []
     
@@ -132,12 +125,6 @@ final class ReaderViewModel {
             withAnimation(.easeOut(duration: 0.2)) { isChromeVisible = true }
         }
         scheduleChromeHide()
-    }
-
-    /// Center tap (iPadOS). No timer here — on touch, Books leaves it to you.
-    func toggleChrome() {
-        chromeHideTask?.cancel()
-        withAnimation(.easeOut(duration: 0.25)) { isChromeVisible.toggle() }
     }
 
     private func scheduleChromeHide() {
@@ -312,7 +299,13 @@ final class ReaderViewModel {
         if currentPageIndex < pages.count - 1 {
             currentPageIndex += 1
         } else if currentChapterIndex < chapters.count - 1 {
+            // This branch is only reachable from the last page of a chapter, which makes
+            // it the one honest "the reader finished chapter N" event in the app.
+            // Deliberately not fired for a jump from the table of contents: chapters
+            // skipped past were never read, and must never enter the recap.
+            let finished = currentChapterIndex
             currentChapterIndex += 1
+            storySummarizer.noteChapterFinished(finished)
             Task { await loadChapter(at: currentChapterIndex) }
         }
     }
@@ -329,11 +322,16 @@ final class ReaderViewModel {
 
     // MARK: - Data Loading
     
-    func loadBook(book: Book) async {
+    func loadBook(book: Book, modelContext: ModelContext? = nil) async {
         loadError = nil
         do {
             let content = try epubService.parse(epubData: book.epubData)
             chapters = content.chapters
+
+            // Books imported before the EPUB's language was being kept still have none.
+            if book.language == nil, let language = content.language {
+                book.language = language
+            }
             setupTTSCallback()
             setupSpeechCallback()
             tableOfContents = content.tableOfContents
@@ -349,6 +347,16 @@ final class ReaderViewModel {
                 await loadChapter(at: currentChapterIndex, start: start)
             }
             isInitialLoadComplete = true
+
+            if let modelContext {
+                // Also backfills: any recent chapter the reader finished before this
+                // feature existed gets summarised now, quietly, in the background.
+                storySummarizer.configure(
+                    book: book,
+                    modelContext: modelContext,
+                    chapters: chapters
+                )
+            }
 
             // If the window reported its real size while the EPUB was still parsing,
             // the pagination above ran against stale geometry. Catch it here instead

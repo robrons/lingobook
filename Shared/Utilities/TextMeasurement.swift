@@ -2,13 +2,8 @@ import Foundation
 import CoreGraphics
 import SwiftUI
 
-#if os(iOS)
-import UIKit
-public typealias PlatformFont = UIFont
-#else
 import AppKit
 public typealias PlatformFont = NSFont
-#endif
 
 /// Page metrics shared by `PageView` (which renders) and `ReaderViewModel` (which
 /// paginates). Both read from here: if the two disagree, text either clips at the
@@ -21,15 +16,8 @@ enum ReaderLayout {
     /// Measured from Apple Books showing the same book on a 1470pt-wide display: 88pt of
     /// margin either side. Generous framing is most of why a page reads as a page rather
     /// than as a document — Books gives its text *less* room than this app used to, and
-    /// looks the better for it. On a phone that much margin would eat the line, so the
-    /// idiom still decides; it never changes at runtime, so paginator and renderer agree.
-    static var horizontalPadding: CGFloat {
-        #if os(iOS)
-        return UIDevice.current.userInterfaceIdiom == .phone ? 20 : 88
-        #else
-        return 88
-        #endif
-    }
+    /// looks the better for it.
+    static let horizontalPadding: CGFloat = 88
 
     /// Books runs ~112pt above its first line and ~140pt below its last. With the chrome
     /// insets below, 56 lands the text at 110/114 — near enough to read the same.
@@ -41,9 +29,9 @@ enum ReaderLayout {
 
     /// Below this the window stays single-column.
     ///
-    /// Raised from 1000: an iPad in portrait is 1032pt, which cleared the old bar and
-    /// split into two 380pt columns of about 35 characters — too narrow to read. Books
-    /// only goes to two columns in landscape, and at 1200 so does this.
+    /// Raised from 1000, where a 1032pt window cleared the bar and then split into two
+    /// 380pt columns of about 35 characters — too narrow to read. Books waits for real
+    /// width before going to two columns, and at 1200 so does this.
     static let twoColumnMinWidth: CGFloat = 1200
 
     /// Room kept for the toolbar and scrubber that float above the page.
@@ -93,11 +81,7 @@ enum ReaderLayout {
 /// Measured and rendered can no longer disagree, because they are the same code path.
 @MainActor
 enum ReaderTextMeasurer {
-    #if os(iOS)
-    private static let hosting = UIHostingController(rootView: AnyView(EmptyView()))
-    #else
     private static let hosting = NSHostingController(rootView: AnyView(EmptyView()))
-    #endif
 
     /// Pagination re-measures the same sentences on every pass (and `split` measures
     /// candidates repeatedly). Hosting-controller layout isn't free, so memoise.
@@ -247,20 +231,10 @@ enum TextMeasurement {
         }
 
         if italic {
-            #if os(iOS)
-            if let italicised = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) {
-                descriptor = italicised
-            }
-            #else
             descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.italic))
-            #endif
         }
 
-        #if os(iOS)
-        return UIFont(descriptor: descriptor, size: size)
-        #else
         return NSFont(descriptor: descriptor, size: size) ?? base
-        #endif
     }
 
     /// Height of `text` laid out in a column `width` points wide, with SwiftUI's

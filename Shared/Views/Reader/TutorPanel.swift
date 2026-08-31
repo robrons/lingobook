@@ -1,5 +1,126 @@
 import SwiftUI
 
+/// What the tutor has been briefed on, in a form the panel can state plainly.
+///
+/// Added because the first version of all this was silent about itself. Background that
+/// was still being fetched, background that had failed, and a book Wikipedia has simply
+/// never heard of all looked exactly alike from the reader's side — a tutor that just
+/// didn't mention it. There was no way to tell "not ready yet" from "not working", which
+/// makes the feature impossible to judge and easy to blame unfairly.
+struct TutorBriefing: Equatable {
+
+    /// One thing that has to be in place, and whether it is.
+    struct Item: Identifiable, Equatable {
+        enum State: Equatable {
+            /// In place. Nothing further will happen.
+            case ready
+            /// Happening now — worth waiting for.
+            case working
+            /// Won't happen without something changing. Not a delay.
+            case blocked
+            /// Deliberately not happening, because it was switched off.
+            case off
+        }
+
+        let id: String
+        let title: String
+        let detail: String
+        let state: State
+    }
+
+    /// Everything the tutor needs, in the order it matters.
+    ///
+    /// A list rather than a sentence, because the previous version reported its state as
+    /// one composed line and there was no way to tell whether the single green check
+    /// covered everything or was one item out of five. A reader deciding whether to trust
+    /// an answer needs to be able to count the steps.
+    var items: [Item]
+
+    var readyCount: Int { items.filter { $0.state == .ready }.count }
+    /// Items that were switched off aren't outstanding; they're answered.
+    var settledCount: Int { items.filter { $0.state != .working }.count }
+    var isSettled: Bool { !items.contains { $0.state == .working } }
+
+    /// The headline: a count first, then whatever is still moving.
+    var summary: String {
+        if let working = items.first(where: { $0.state == .working }) {
+            return "\(readyCount) of \(items.count) ready · \(working.detail)"
+        }
+        if let blocked = items.first(where: { $0.state == .blocked }) {
+            return "\(readyCount) of \(items.count) ready · \(blocked.detail)"
+        }
+        if readyCount == items.count { return "Ready — all \(items.count) checks passed" }
+        return "\(readyCount) of \(items.count) ready"
+    }
+}
+
+/// A question worth having one click away.
+///
+/// The panel's blank composer is a bad prompt for a reader: it asks them to invent the
+/// question *and* phrase it well, mid-paragraph, in a language they may be learning. The
+/// chip carries a short label and a carefully written question behind it, so a click
+/// buys a better prompt than most people would type — which matters more here than it
+/// would with a larger model, because an 8B model's answer is only as good as the ask.
+struct TutorPrompt: Identifiable, Equatable {
+
+    let id: String
+    let label: String
+    let question: String
+
+    /// Ordered by how often a reader reaches for them, not by category.
+    static let all: [TutorPrompt] = [
+        TutorPrompt(
+            id: "explain",
+            label: "Explain",
+            question: "Explain this page in plain terms — what is being said here?"
+        ),
+        // The one this whole set exists for. A passage of Saint-Exupéry can be perfectly
+        // legible word by word and still leave you with no idea what he is driving at,
+        // and that is not a question about vocabulary.
+        // Each asks for exactly one thing. An earlier version of the "meaning" prompt
+        // asked for the idea, the lines it rests on, and any second reading — three
+        // requests, which came back as three numbered sections with bold headings. One
+        // question gets one paragraph.
+        TutorPrompt(
+            id: "meaning",
+            label: "What it means",
+            question: """
+            What is the author getting at in this passage? Give me the idea itself, in \
+            plain terms — not a line-by-line walkthrough.
+            """
+        ),
+        TutorPrompt(
+            id: "summarize",
+            label: "Summarise",
+            question: "Summarise what happens on this page in two or three sentences."
+        ),
+        TutorPrompt(
+            id: "story",
+            label: "Story so far",
+            question: """
+            Briefly, what has happened in the book up to this point? Use only what I have \
+            actually read — nothing from later in the book.
+            """
+        ),
+        TutorPrompt(
+            id: "who",
+            label: "Who's who",
+            question: """
+            Who are the people mentioned on this page? One short line each on who they \
+            are and what I should remember about them.
+            """
+        ),
+        TutorPrompt(
+            id: "background",
+            label: "Background",
+            question: """
+            Briefly, what is the historical or cultural background to what this page \
+            describes? Say if you are not certain.
+            """
+        )
+    ]
+}
+
 /// Holds one conversation with the tutor about the book being read.
 ///
 /// Deliberately separate from `ReaderViewModel`: the tutor is a guest in the reader,
@@ -17,6 +138,17 @@ final class TutorPanelModel {
     /// reopens the way it was left.
     var isMinimized = false
 
+    /// Whether the readiness checklist is open. Starts open: the first question of a
+    /// session is the one most likely to be asked of a tutor that isn't ready yet.
+    var isBriefingExpanded = true
+
+    /// Whether Ollama is running, and whether the model is loaded.
+    var engineState: Ollama.EngineState = .checking
+
+    func refreshEngineState() async {
+        engineState = await Ollama.engineState()
+    }
+
     /// Displacement from the panel's resting corner, in points. Also here so dragging
     /// the card somewhere useful survives closing and reopening it.
     var position: CGSize = .zero
@@ -28,18 +160,31 @@ final class TutorPanelModel {
     private var lastPageID: String?
 
     private let tutor: any TutorService
+
+    /// Looks up what the question is about before the question is sent.
+    ///
+    /// Nil disables it entirely — which is what the Settings toggle amounts to, and what
+    /// a test that shouldn't touch the network passes.
+    private let referenceLookup: ReferenceLookup?
+
     private var streamTask: Task<Void, Never>?
 
-    init(tutor: any TutorService = OllamaTutor()) {
+    init(
+        tutor: any TutorService = OllamaTutor(),
+        referenceLookup: ReferenceLookup? = ReferenceLookup()
+    ) {
         self.tutor = tutor
+        self.referenceLookup = referenceLookup
     }
 
     var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResponding
     }
 
-    func send(context: TutorContext) {
-        let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// - Parameter asking: a question to send instead of whatever is typed. This is how a
+    ///   prompt chip asks without first stuffing its text into the composer.
+    func send(context: TutorContext, asking: String? = nil) {
+        let question = (asking ?? draft).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isResponding else { return }
 
         draft = ""
@@ -60,7 +205,24 @@ final class TutorPanelModel {
         messages.append(reply)
         isResponding = true
 
-        streamTask = Task { [tutor] in
+        streamTask = Task { [tutor, referenceLookup] in
+            var context = context
+
+            // Retrieval happens here rather than inside the tutor, because it isn't the
+            // model's job to decide when to look something up — and the panel already
+            // shows a spinner until the first token, so the wait has somewhere to live.
+            if let referenceLookup,
+               let notes = await referenceLookup.referenceBlock(
+                   for: question,
+                   bookLanguage: context.language,
+                   excluding: [context.bookTitle, context.bookAuthor]
+               ) {
+                context.references = notes.block
+                if let index = messages.firstIndex(where: { $0.id == reply.id }) {
+                    messages[index].references = notes.titles
+                }
+            }
+
             do {
                 for try await piece in tutor.stream(
                     question: question, context: context, history: history
@@ -98,7 +260,13 @@ struct TutorPanel: View {
     @Bindable var model: TutorPanelModel
     let theme: BookTheme
     let context: TutorContext
+    /// What the tutor currently knows, stated in the panel so it never has to be guessed.
+    let briefing: TutorBriefing
     let onClose: () -> Void
+    /// The reader's chosen text size, so the conversation reads at the size they set
+    /// for the book rather than at a fixed one they never chose.
+    let fontSize: CGFloat
+
     /// Non-nil while the reader is holding space to dictate.
     var listeningStatus: String?
     /// Speaks a reply aloud on demand — playback is never automatic.
@@ -109,11 +277,33 @@ struct TutorPanel: View {
     /// Offered while weights are being fetched, in case a copy already exists on disk.
     var onChooseModelFolder: (() -> Void)?
 
+    /// The conversation is set in the book's own face — New York, the serif system font
+    /// `TextMeasurement.serifFont` measures the page in — a touch under the page's size.
+    ///
+    /// Matching the typeface is what makes the panel read as part of the book rather than
+    /// as a chat window parked on top of it. Compensating with the system sans at a
+    /// smaller size, which is what this did first, only ever approximated that: a sans
+    /// face carries a larger x-height and tighter leading, so it still announced itself
+    /// as different text no matter what the number said.
+    private var bodyFont: Font { .system(size: fontSize * 0.9, design: .serif) }
+
+    /// Labels, chips, and status lines follow the reading size at a fraction of its
+    /// travel. Scaled one-for-one, chrome at 28pt would leave a 380pt panel with room
+    /// for about four words a line; ignored entirely, it drifts away from the prose it
+    /// sits beside. Clamped, it stays legible next to the text without crowding it.
+    private func chrome(_ base: CGFloat, weight: Font.Weight = .regular) -> Font {
+        // Sans, deliberately: labels, chips, and status lines are controls, not prose,
+        // and setting them in the book's face would blur which is which.
+        .system(size: base * min(1.35, max(0.85, fontSize / 17)), weight: weight)
+    }
+
     /// Live drag, discarded when the gesture ends — the committed value moves to
     /// `model.position` so it outlives the gesture.
     @GestureState private var dragTranslation: CGSize = .zero
 
-    private static let expandedHeight: CGFloat = 480
+    /// Taller than it was: at the reader's own text size a 480pt card showed barely two
+    /// exchanges before scrolling.
+    private static let expandedHeight: CGFloat = 560
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,6 +311,10 @@ struct TutorPanel: View {
 
             if !model.isMinimized {
                 Divider()
+
+                briefingRow
+
+                Divider().opacity(0.4)
 
                 if model.messages.isEmpty {
                     emptyState
@@ -130,6 +324,13 @@ struct TutorPanel: View {
 
                 if let errorMessage = model.errorMessage {
                     errorNotice(errorMessage)
+                }
+
+                // Only once there's a transcript — while the panel is empty the chips are
+                // already the centrepiece, and showing them twice would be noise.
+                if !model.messages.isEmpty {
+                    Divider().opacity(0.4)
+                    promptStrip
                 }
 
                 Divider()
@@ -161,7 +362,7 @@ struct TutorPanel: View {
                 .foregroundStyle(theme.textColor.opacity(0.6))
 
             Text("Tutor")
-                .font(.headline)
+                .font(chrome(13, weight: .semibold))
                 .foregroundStyle(theme.textColor)
 
             Spacer()
@@ -169,7 +370,7 @@ struct TutorPanel: View {
             if !model.messages.isEmpty && !model.isMinimized {
                 Button("Clear", action: model.clear)
                     .buttonStyle(.plain)
-                    .font(.caption)
+                    .font(chrome(11))
                     .foregroundStyle(theme.textColor.opacity(0.6))
             }
 
@@ -240,35 +441,164 @@ struct TutorPanel: View {
             }
     }
 
+    // MARK: - What the tutor knows
+
+    /// A permanent, countable answer to "is this thing actually ready?".
+    ///
+    /// The summary line is always visible; tapping it opens the itemised list, so the
+    /// reader can see every step rather than infer the whole from one green check.
+    private var briefingRow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.16)) { model.isBriefingExpanded.toggle() }
+            } label: {
+                HStack(spacing: 7) {
+                    Group {
+                        if briefing.isSettled {
+                            Image(systemName: briefing.readyCount == briefing.items.count
+                                  ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        } else {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
+                    .font(chrome(10))
+                    .foregroundStyle(briefing.readyCount == briefing.items.count
+                                     ? .green.opacity(0.8) : theme.textColor.opacity(0.5))
+                    .frame(width: 12)
+
+                    Text(briefing.summary)
+                        .font(chrome(10))
+                        .foregroundStyle(theme.textColor.opacity(0.55))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .rotationEffect(.degrees(model.isBriefingExpanded ? 0 : -90))
+                        .foregroundStyle(theme.textColor.opacity(0.35))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("What the tutor has ready for this book")
+            .accessibilityLabel("Tutor readiness: \(briefing.summary)")
+
+            if model.isBriefingExpanded {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(briefing.items) { item in
+                        briefingItem(item)
+                    }
+                }
+                .padding(.top, 9)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func briefingItem(_ item: TutorBriefing.Item) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Group {
+                switch item.state {
+                case .ready:
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green.opacity(0.8))
+                case .working:
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(theme.textColor.opacity(0.5))
+                case .blocked:
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange.opacity(0.85))
+                case .off:
+                    Image(systemName: "minus.circle").foregroundStyle(theme.textColor.opacity(0.3))
+                }
+            }
+            .font(.system(size: 10))
+            .frame(width: 12)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(chrome(10, weight: .medium))
+                    .foregroundStyle(theme.textColor.opacity(0.7))
+                Text(item.detail)
+                    .font(chrome(10))
+                    .foregroundStyle(theme.textColor.opacity(0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
     // MARK: - Body states
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Spacer()
 
             Image(systemName: "character.book.closed")
-                .font(.system(size: 26))
+                .font(.system(size: 24))
                 .foregroundStyle(theme.textColor.opacity(0.25))
 
             Text("Ask about this page")
-                .font(.callout)
+                .font(chrome(12))
                 .foregroundStyle(theme.textColor.opacity(0.6))
 
-            Text("“What's quinquina, and why is she making it?”")
-                .font(.caption)
-                .italic()
-                .multilineTextAlignment(.center)
-                .foregroundStyle(theme.textColor.opacity(0.4))
+            // The chips are the affordance here, in place of the single example question
+            // that used to sit alone: one of them is usually the question, and reading
+            // six labels is faster than composing a sentence.
+            FlowLayout(spacing: 6) {
+                ForEach(TutorPrompt.all) { prompt in
+                    promptChip(prompt)
+                }
+            }
+            .padding(.horizontal, 4)
 
-            Text("Hold space to speak")
-                .font(.caption2)
+            Text("…or type your own, or hold space to speak")
+                .font(chrome(10))
+                .multilineTextAlignment(.center)
                 .foregroundStyle(theme.textColor.opacity(0.35))
-                .padding(.top, 2)
 
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
+    }
+
+    /// The same prompts, on one scrolling line, for when a conversation is already going.
+    private var promptStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(TutorPrompt.all) { prompt in
+                    promptChip(prompt)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func promptChip(_ prompt: TutorPrompt) -> some View {
+        Button {
+            model.send(context: context, asking: prompt.question)
+        } label: {
+            Text(prompt.label)
+                .font(chrome(10))
+                .foregroundStyle(theme.textColor.opacity(model.isResponding ? 0.3 : 0.75))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(theme.textColor.opacity(0.07))
+                )
+                .overlay(
+                    Capsule().strokeBorder(theme.textColor.opacity(0.10))
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isResponding)
+        .help(prompt.question)
     }
 
     private var transcript: some View {
@@ -297,7 +627,7 @@ struct TutorPanel: View {
             HStack(spacing: 8) {
                 Rectangle().frame(height: 1).opacity(0.12)
                 Text(message.text)
-                    .font(.caption2)
+                    .font(chrome(10))
                     .fixedSize()
                 Rectangle().frame(height: 1).opacity(0.12)
             }
@@ -310,7 +640,7 @@ struct TutorPanel: View {
     private func exchange(_ message: TutorMessage) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(message.role == .reader ? "You" : "Tutor")
-                .font(.caption2.weight(.semibold))
+                .font(chrome(10, weight: .semibold))
                 .foregroundStyle(theme.textColor.opacity(0.45))
 
             if message.text.isEmpty && model.isResponding {
@@ -320,15 +650,30 @@ struct TutorPanel: View {
             } else if message.role == .reader {
                 // The reader's own words go through verbatim — nothing to interpret.
                 Text(message.text)
-                    .font(.callout)
+                    .font(bodyFont)
                     .foregroundStyle(theme.textColor.opacity(0.75))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 MarkdownText(raw: message.text)
-                    .font(.callout)
+                    .font(bodyFont)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
+
+                // Says where an answer could have come from. Retrieval that happens
+                // invisibly can't be checked — and when the tutor gets something wrong,
+                // this is what separates a bad answer from a badly chosen article.
+                if !message.references.isEmpty {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "book.closed")
+                            .font(.system(size: 9))
+                        Text("Looked up \(message.references.joined(separator: ", "))")
+                            .font(chrome(10))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(theme.textColor.opacity(0.4))
+                    .padding(.top, 1)
+                }
 
                 if let onSpeak, !model.isResponding || message.id != model.messages.last?.id {
                     let speakingThis = isSpeaking && model.speakingMessageID == message.id
@@ -347,7 +692,7 @@ struct TutorPanel: View {
                             systemImage: speakingThis ? "stop.fill" : "speaker.wave.2"
                         )
                         .labelStyle(.iconOnly)
-                        .font(.caption)
+                        .font(chrome(11))
                         .foregroundStyle(speakingThis ? Color.accentColor : theme.textColor.opacity(0.45))
                         .frame(width: 22, height: 18)
                         .contentShape(Rectangle())
@@ -366,7 +711,7 @@ struct TutorPanel: View {
                 .foregroundStyle(.orange)
 
             Text(message)
-                .font(.caption)
+                .font(chrome(11))
                 .foregroundStyle(theme.textColor.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -401,7 +746,7 @@ struct TutorPanel: View {
                     Text(listeningStatus)
                     Spacer()
                 }
-                .font(.caption)
+                .font(chrome(11))
                 .foregroundStyle(theme.textColor.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -409,7 +754,7 @@ struct TutorPanel: View {
             if let onChooseModelFolder {
                 Button("Use a copy already on this Mac…", action: onChooseModelFolder)
                     .buttonStyle(.plain)
-                    .font(.caption2)
+                    .font(chrome(10))
                     .foregroundStyle(Color.accentColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -429,7 +774,7 @@ struct TutorPanel: View {
             )
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
-                .font(.callout)
+                .font(bodyFont)
                 .foregroundStyle(theme.textColor)
                 .onSubmit { model.send(context: context) }
 
@@ -454,6 +799,77 @@ struct TutorPanel: View {
                 .accessibilityLabel("Ask")
             }
         }
+    }
+}
+
+// MARK: - Flow layout
+
+/// Lays chips out left to right, wrapping when the row runs out of width.
+///
+/// `HStack` would push six chips off the edge of a 380pt panel and `LazyVGrid` would
+/// force them into columns of equal width, leaving "Explain" as wide as "Story so far".
+/// Chips should take the width of their own words.
+private struct FlowLayout: Layout {
+
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = arrange(subviews: subviews, in: width)
+
+        let height = rows.reduce(into: CGFloat.zero) { total, row in
+            total += row.height + (total == 0 ? 0 : spacing)
+        }
+        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
+        var y = bounds.minY
+        for row in arrange(subviews: subviews, in: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y),
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(subviews: Subviews, in width: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+
+            if needed > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = Row()
+                current.indices = [index]
+                current.width = size.width
+                current.height = size.height
+            } else {
+                current.indices.append(index)
+                current.width = needed
+                current.height = max(current.height, size.height)
+            }
+        }
+
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
     }
 }
 

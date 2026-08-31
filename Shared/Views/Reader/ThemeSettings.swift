@@ -3,8 +3,8 @@ import SwiftUI
 /// The "AA" popover: choices about *reading this book right now*.
 ///
 /// Deliberately not a settings screen. Anything you set once and forget — TTS engine,
-/// API key, voice — lives in Settings (⌘, on Mac, the gear in the Library on iPad).
-/// Read language appears in both, because it's both a preference and a reading choice;
+/// API key, voice — lives in Settings (⌘,). Read language appears in both, because it's
+/// both a preference and a reading choice;
 /// they share one AppStorage key, so they can't disagree.
 struct ThemeSettings: View {
     @Binding var fontSize: CGFloat
