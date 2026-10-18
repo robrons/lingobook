@@ -17,14 +17,7 @@
 		SH021001 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
 		SH003001 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
 		SH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
-		SH027001 /* TutorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH027000 /* TutorService.swift */; };
 		SH029001 /* DictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH029000 /* DictationService.swift */; };
-		SH030001 /* WikipediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH030000 /* WikipediaService.swift */; };
-		SH034001 /* BookGrounding.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH034000 /* BookGrounding.swift */; };
-		SH031001 /* EntityExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH031000 /* EntityExtractor.swift */; };
-		SH032001 /* StorySummarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH032000 /* StorySummarizer.swift */; };
-		SH033001 /* ChapterSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH033000 /* ChapterSummary.swift */; };
-		SH028001 /* TutorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH028000 /* TutorPanel.swift */; };
 		SH019001 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
 		SH022001 /* TextMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH022000 /* TextMeasurement.swift */; };
 		SH025001 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH025000 /* SentenceSplitter.swift */; };
@@ -40,10 +33,64 @@
 		SH012001 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
 		SH026001 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH026000 /* JustifiedText.swift */; };
 		SH013001 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
-		SH014001 /* PageNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH014000 /* PageNavigator.swift */; };
 		SH015001 /* ThemeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH015000 /* ThemeSettings.swift */; };
 		SH016001 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH016000 /* ReaderView.swift */; };
 		SH017001 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
+		IPSH001001 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
+		IPSH002001 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
+		IPSH021001 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
+		IPSH003001 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH003000 /* TranslationService.swift */; };
+		IPSH004003 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
+		IPSH019001 /* SpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH019000 /* SpeechRecognitionService.swift */; };
+		IPSH022001 /* TextMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH022000 /* TextMeasurement.swift */; };
+		IPSH025001 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH025000 /* SentenceSplitter.swift */; };
+		IPSH024001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH024000 /* SettingsView.swift */; };
+		IPSH020001 /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH020000 /* ModelContainerFactory.swift */; };
+		IPSH005001 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
+		IPSH006001 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH006000 /* Clipboard.swift */; };
+		IPSH007001 /* ReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH007000 /* ReaderViewModel.swift */; };
+		IPSH008001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH008000 /* ContentView.swift */; };
+		IPSH009001 /* BookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH009000 /* BookCard.swift */; };
+		IPSH010001 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH010000 /* LibraryView.swift */; };
+		IPSH011001 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
+		IPSH012001 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
+		IPSH026001 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH026000 /* JustifiedText.swift */; };
+		IPSH013001 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH013000 /* ReaderToolbar.swift */; };
+		IPSH015001 /* ThemeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH015000 /* ThemeSettings.swift */; };
+		IPSH016001 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH016000 /* ReaderView.swift */; };
+		IPSH017001 /* TOCSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH017000 /* TOCSheet.swift */; };
+		IPAPP001 /* LingoBookiPadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = IPAPP000; };
+		IPAST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AST001000; };
+		IPZIP001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = IPZIP000; };
+		SH030001 /* TranslationMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH030000 /* TranslationMemory.swift */; };
+		SH031001 /* BookTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH031000 /* BookTransfer.swift */; };
+		SH032001 /* DisplaySleepPreventer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH032000 /* DisplaySleepPreventer.swift */; };
+		MAC003001 /* BookPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAC003000 /* BookPreparer.swift */; };
+		MAC004001 /* AppleTVSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAC004000 /* AppleTVSender.swift */; };
+		IPSH030001 /* TranslationMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH030000 /* TranslationMemory.swift */; };
+		IPSH032001 /* DisplaySleepPreventer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH032000 /* DisplaySleepPreventer.swift */; };
+		TVAPP001 /* LingoBookTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVAPP000 /* LingoBookTVApp.swift */; };
+		TVRCV001 /* BookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVRCV000 /* BookReceiver.swift */; };
+		TVLIB001 /* TVLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVLIB000 /* TVLibraryView.swift */; };
+		TVRDR001 /* TVReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVRDR000 /* TVReaderView.swift */; };
+		TVSH001002 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
+		TVSH030002 /* TranslationMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH030000 /* TranslationMemory.swift */; };
+		TVSH031002 /* BookTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH031000 /* BookTransfer.swift */; };
+		TVSH002002 /* EPUBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH002000 /* EPUBService.swift */; };
+		TVSH021002 /* XHTMLTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH021000 /* XHTMLTextParser.swift */; };
+		TVSH004002 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH004004 /* TTSService.swift */; };
+		TVSH022002 /* TextMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH022000 /* TextMeasurement.swift */; };
+		TVSH025002 /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH025000 /* SentenceSplitter.swift */; };
+		TVSH020002 /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH020000 /* ModelContainerFactory.swift */; };
+		TVSH005002 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH005000 /* PlatformImage.swift */; };
+		TVSH007002 /* ReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH007000 /* ReaderViewModel.swift */; };
+		TVSH009002 /* BookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH009000 /* BookCard.swift */; };
+		TVSH011002 /* BookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH011000 /* BookTheme.swift */; };
+		TVSH012002 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH012000 /* PageView.swift */; };
+		TVSH026002 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH026000 /* JustifiedText.swift */; };
+		TVSH032002 /* DisplaySleepPreventer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH032000 /* DisplaySleepPreventer.swift */; };
+		TVZIP001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = TVZIP000 /* ZIPFoundation */; };
+		TVAST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = TVAST000 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,14 +105,7 @@
 		SH021000 /* XHTMLTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHTMLTextParser.swift; sourceTree = "<group>"; };
 		SH003000 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		SH004004 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
-		SH027000 /* TutorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorService.swift; sourceTree = "<group>"; };
 		SH029000 /* DictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationService.swift; sourceTree = "<group>"; };
-		SH028000 /* TutorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorPanel.swift; sourceTree = "<group>"; };
-		SH030000 /* WikipediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikipediaService.swift; sourceTree = "<group>"; };
-		SH034000 /* BookGrounding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookGrounding.swift; sourceTree = "<group>"; };
-		SH031000 /* EntityExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityExtractor.swift; sourceTree = "<group>"; };
-		SH032000 /* StorySummarizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorySummarizer.swift; sourceTree = "<group>"; };
-		SH033000 /* ChapterSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterSummary.swift; sourceTree = "<group>"; };
 		SH019000 /* SpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionService.swift; sourceTree = "<group>"; };
 		SH022000 /* TextMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextMeasurement.swift; sourceTree = "<group>"; };
 		SH025000 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
@@ -81,10 +121,25 @@
 		SH012000 /* PageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageView.swift; sourceTree = "<group>"; };
 		SH026000 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
 		SH013000 /* ReaderToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderToolbar.swift; sourceTree = "<group>"; };
-		SH014000 /* PageNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNavigator.swift; sourceTree = "<group>"; };
 		SH015000 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
 		SH016000 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		SH017000 /* TOCSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOCSheet.swift; sourceTree = "<group>"; };
+		IPAPP000 /* LingoBookiPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookiPadApp.swift; sourceTree = "<group>"; };
+		IPINFO00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		IPPRD000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		SH030000 /* TranslationMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationMemory.swift; sourceTree = "<group>"; };
+		SH031000 /* BookTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTransfer.swift; sourceTree = "<group>"; };
+		SH032000 /* DisplaySleepPreventer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaySleepPreventer.swift; sourceTree = "<group>"; };
+		MAC003000 /* BookPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookPreparer.swift; sourceTree = "<group>"; };
+		MAC004000 /* AppleTVSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTVSender.swift; sourceTree = "<group>"; };
+		TVAPP000 /* LingoBookTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoBookTVApp.swift; sourceTree = "<group>"; };
+		TVRCV000 /* BookReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookReceiver.swift; sourceTree = "<group>"; };
+		TVLIB000 /* TVLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryView.swift; sourceTree = "<group>"; };
+		TVRDR000 /* TVReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVReaderView.swift; sourceTree = "<group>"; };
+		MAC005000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		TVINFO00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		TVPRD000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		TVAST000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +159,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        IPFRM000 = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (IPZIP001,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+		TVFRM000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TVZIP001 /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -112,6 +181,8 @@
 			children = (
 				GRP001000 /* Shared */,
 				GRP002000 /* macOS */,
+				IPGRP000 /* iOS */,
+				TVGRP000 /* tvOS */,
 				GRP005000 /* UITests */,
 				GRP004000 /* Products */,
 			);
@@ -142,7 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				SH001000 /* Book.swift */,
-				SH033000 /* ChapterSummary.swift */,
+				SH030000 /* TranslationMemory.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -151,14 +222,10 @@
 			isa = PBXGroup;
 			children = (
 				SH002000 /* EPUBService.swift */,
+				SH031000 /* BookTransfer.swift */,
 				SH021000 /* XHTMLTextParser.swift */,
 				SH003000 /* TranslationService.swift */,
 				SH004004 /* TTSService.swift */,
-				SH027000 /* TutorService.swift */,
-				SH030000 /* WikipediaService.swift */,
-				SH034000 /* BookGrounding.swift */,
-				SH031000 /* EntityExtractor.swift */,
-				SH032000 /* StorySummarizer.swift */,
 				SH029000 /* DictationService.swift */,
 				SH019000 /* SpeechRecognitionService.swift */,
 			);
@@ -169,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				SH020000 /* ModelContainerFactory.swift */,
+				SH032000 /* DisplaySleepPreventer.swift */,
 				SH022000 /* TextMeasurement.swift */,
 				SH025000 /* SentenceSplitter.swift */,
 				SH005000 /* PlatformImage.swift */,
@@ -211,9 +279,7 @@
 				SH011000 /* BookTheme.swift */,
 				SH012000 /* PageView.swift */,
 				SH026000 /* JustifiedText.swift */,
-				SH028000 /* TutorPanel.swift */,
 				SH013000 /* ReaderToolbar.swift */,
-				SH014000 /* PageNavigator.swift */,
 				SH015000 /* ThemeSettings.swift */,
 				SH016000 /* ReaderView.swift */,
 				SH017000 /* TOCSheet.swift */,
@@ -226,6 +292,9 @@
 			children = (
 				MAC001000 /* LingoBookMacApp.swift */,
 				MAC002000 /* LingoBook.entitlements */,
+				MAC003000 /* BookPreparer.swift */,
+				MAC004000 /* AppleTVSender.swift */,
+				MAC005000 /* Info.plist */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -234,9 +303,30 @@
 			isa = PBXGroup;
 			children = (
 				PRD001000 /* LingoBook.app */,
+				IPPRD000 /* LingoBook.app */,
+				TVPRD000 /* LingoBook.app */,
 				UIT001000 /* LingoBookUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		IPGRP000 /* iOS */ = {
+            isa = PBXGroup;
+            children = (IPAPP000, IPINFO00,);
+            path = iOS;
+            sourceTree = "<group>";
+        };
+		TVGRP000 /* tvOS */ = {
+			isa = PBXGroup;
+			children = (
+				TVAPP000 /* LingoBookTVApp.swift */,
+				TVRCV000 /* BookReceiver.swift */,
+				TVLIB000 /* TVLibraryView.swift */,
+				TVRDR000 /* TVReaderView.swift */,
+				TVINFO00 /* Info.plist */,
+				TVAST000 /* Assets.xcassets */,
+			);
+			path = tvOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -279,6 +369,38 @@
 			productName = LingoBookUITests;
 			productReference = UIT001000 /* LingoBookUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+        IPTGT000 /* LingoBook (iPadOS) */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = IPCFG000;
+            buildPhases = (IPSRC000, IPFRM000, IPRES000,);
+            buildRules = ();
+            dependencies = ();
+            name = "LingoBook (iPadOS)";
+            packageProductDependencies = (IPZIP000,);
+            productName = LingoBook;
+            productReference = IPPRD000;
+            productType = "com.apple.product-type.application";
+        };
+		TVTGT000 /* LingoBook (tvOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = TVCFG000 /* Build configuration list for PBXNativeTarget "LingoBook (tvOS)" */;
+			buildPhases = (
+				TVSRC000 /* Sources */,
+				TVFRM000 /* Frameworks */,
+				TVRES000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "LingoBook (tvOS)";
+			packageProductDependencies = (
+				TVZIP000 /* ZIPFoundation */,
+			);
+			productName = LingoBook;
+			productReference = TVPRD000 /* LingoBook.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -334,8 +456,10 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                IPTGT000 /* LingoBook (iPadOS) */,
 				TGT001000 /* LingoBook (macOS) */,
 				TGT003000 /* LingoBookUITests */,
+				TVTGT000 /* LingoBook (tvOS) */,
 			);
 		};
 /* End PBXProject section */
@@ -346,6 +470,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				AST001001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+        IPRES000 = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (IPAST001,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+		TVRES000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TVAST001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,14 +500,7 @@
 				SH021001 /* XHTMLTextParser.swift in Sources */,
 				SH003001 /* TranslationService.swift in Sources */,
 				SH004003 /* TTSService.swift in Sources */,
-				SH027001 /* TutorService.swift in Sources */,
-				SH030001 /* WikipediaService.swift in Sources */,
-				SH034001 /* BookGrounding.swift in Sources */,
-				SH031001 /* EntityExtractor.swift in Sources */,
-				SH032001 /* StorySummarizer.swift in Sources */,
-				SH033001 /* ChapterSummary.swift in Sources */,
 				SH029001 /* DictationService.swift in Sources */,
-				SH028001 /* TutorPanel.swift in Sources */,
 				SH019001 /* SpeechRecognitionService.swift in Sources */,
 				SH020001 /* ModelContainerFactory.swift in Sources */,
 				SH022001 /* TextMeasurement.swift in Sources */,
@@ -385,10 +516,14 @@
 				SH012001 /* PageView.swift in Sources */,
 				SH026001 /* JustifiedText.swift in Sources */,
 				SH013001 /* ReaderToolbar.swift in Sources */,
-				SH014001 /* PageNavigator.swift in Sources */,
 				SH015001 /* ThemeSettings.swift in Sources */,
 				SH016001 /* ReaderView.swift in Sources */,
 				SH017001 /* TOCSheet.swift in Sources */,
+				SH030001 /* TranslationMemory.swift in Sources */,
+				SH031001 /* BookTransfer.swift in Sources */,
+				SH032001 /* DisplaySleepPreventer.swift in Sources */,
+				MAC003001 /* BookPreparer.swift in Sources */,
+				MAC004001 /* AppleTVSender.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -397,6 +532,66 @@
 			buildActionMask = 2147483647;
 			files = (
 				UIT003000 /* ReaderUXTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		IPSRC000 /* Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                IPAPP001,
+				IPSH001001 /* Book.swift in Sources */,
+				IPSH002001 /* EPUBService.swift in Sources */,
+				IPSH021001 /* XHTMLTextParser.swift in Sources */,
+				IPSH003001 /* TranslationService.swift in Sources */,
+				IPSH004003 /* TTSService.swift in Sources */,
+				IPSH019001 /* SpeechRecognitionService.swift in Sources */,
+				IPSH022001 /* TextMeasurement.swift in Sources */,
+				IPSH025001 /* SentenceSplitter.swift in Sources */,
+				IPSH024001 /* SettingsView.swift in Sources */,
+				IPSH020001 /* ModelContainerFactory.swift in Sources */,
+				IPSH005001 /* PlatformImage.swift in Sources */,
+				IPSH006001 /* Clipboard.swift in Sources */,
+				IPSH007001 /* ReaderViewModel.swift in Sources */,
+				IPSH008001 /* ContentView.swift in Sources */,
+				IPSH009001 /* BookCard.swift in Sources */,
+				IPSH010001 /* LibraryView.swift in Sources */,
+				IPSH011001 /* BookTheme.swift in Sources */,
+				IPSH012001 /* PageView.swift in Sources */,
+				IPSH026001 /* JustifiedText.swift in Sources */,
+				IPSH013001 /* ReaderToolbar.swift in Sources */,
+				IPSH015001 /* ThemeSettings.swift in Sources */,
+				IPSH016001 /* ReaderView.swift in Sources */,
+				IPSH017001 /* TOCSheet.swift in Sources */,
+				IPSH030001 /* TranslationMemory.swift in Sources */,
+				IPSH032001 /* DisplaySleepPreventer.swift in Sources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+		TVSRC000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TVAPP001 /* LingoBookTVApp.swift in Sources */,
+				TVRCV001 /* BookReceiver.swift in Sources */,
+				TVLIB001 /* TVLibraryView.swift in Sources */,
+				TVRDR001 /* TVReaderView.swift in Sources */,
+				TVSH001002 /* Book.swift in Sources */,
+				TVSH030002 /* TranslationMemory.swift in Sources */,
+				TVSH031002 /* BookTransfer.swift in Sources */,
+				TVSH002002 /* EPUBService.swift in Sources */,
+				TVSH021002 /* XHTMLTextParser.swift in Sources */,
+				TVSH004002 /* TTSService.swift in Sources */,
+				TVSH022002 /* TextMeasurement.swift in Sources */,
+				TVSH025002 /* SentenceSplitter.swift in Sources */,
+				TVSH020002 /* ModelContainerFactory.swift in Sources */,
+				TVSH005002 /* PlatformImage.swift in Sources */,
+				TVSH007002 /* ReaderViewModel.swift in Sources */,
+				TVSH009002 /* BookCard.swift in Sources */,
+				TVSH011002 /* BookTheme.swift in Sources */,
+				TVSH012002 /* PageView.swift in Sources */,
+				TVSH026002 /* JustifiedText.swift in Sources */,
+				TVSH032002 /* DisplaySleepPreventer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -485,6 +680,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = macOS/LingoBook.entitlements;
+				INFOPLIST_FILE = macOS/Info.plist;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -514,6 +710,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = macOS/LingoBook.entitlements;
+				INFOPLIST_FILE = macOS/Info.plist;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -586,6 +783,120 @@
 			};
 			name = Release;
 		};
+        IPCFG001 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_STYLE = Automatic;
+                CURRENT_PROJECT_VERSION = 1;
+                DEVELOPMENT_TEAM = YY96UL254B;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = iOS/Info.plist;
+                INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+                INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen for your next and previous page voice commands.";
+                INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Recognize your voice commands to turn book pages.";
+                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+                IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks",);
+                MARKETING_VERSION = 1.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.ipad;
+                PRODUCT_NAME = LingoBook;
+                SDKROOT = iphoneos;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+                SWIFT_EMIT_LOC_STRINGS = YES;
+                SWIFT_VERSION = 6.0;
+                TARGETED_DEVICE_FAMILY = 2;
+            };
+            name = Debug;
+        };
+        IPCFG002 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_STYLE = Automatic;
+                CURRENT_PROJECT_VERSION = 1;
+                DEVELOPMENT_TEAM = YY96UL254B;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = iOS/Info.plist;
+                INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+                INFOPLIST_KEY_NSMicrophoneUsageDescription = "Listen for your next and previous page voice commands.";
+                INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Recognize your voice commands to turn book pages.";
+                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+                IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks",);
+                MARKETING_VERSION = 1.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.ipad;
+                PRODUCT_NAME = LingoBook;
+                SDKROOT = iphoneos;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+                SWIFT_EMIT_LOC_STRINGS = YES;
+                SWIFT_VERSION = 6.0;
+                TARGETED_DEVICE_FAMILY = 2;
+            };
+            name = Release;
+        };
+		TVCFG001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				INFOPLIST_FILE = tvOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.tv;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		TVCFG002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YY96UL254B;
+				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				INFOPLIST_FILE = tvOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoBook;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lingobook.tv;
+				PRODUCT_NAME = LingoBook;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -612,6 +923,21 @@
 			buildConfigurations = (
 				CFG003001 /* Debug */,
 				CFG003002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+        IPCFG000 = {
+            isa = XCConfigurationList;
+            buildConfigurations = (IPCFG001, IPCFG002,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+		TVCFG000 /* Build configuration list for PBXNativeTarget "LingoBook (tvOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TVCFG001 /* Debug */,
+				TVCFG002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -647,6 +973,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = PKG003000 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+        IPZIP000 /* ZIPFoundation */ = {
+            isa = XCSwiftPackageProductDependency;
+            package = PKG001000;
+            productName = ZIPFoundation;
+        };
+		TVZIP000 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKG001000 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

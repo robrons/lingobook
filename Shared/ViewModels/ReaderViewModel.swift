@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
+#if !os(tvOS)
 @preconcurrency import Translation
+#endif
 
 /// ViewModel for the Reader view, managing all reading state and logic
 @MainActor
@@ -44,7 +46,12 @@ final class ReaderViewModel {
 
     var allUnits: [TextUnit] = []
     var pages: [Page] = []
-    var currentPageIndex: Int = 0
+    var currentPageIndex: Int = 0 {
+        didSet { readingAnchor = nil }
+    }
+    /// Keep the original character position through repeated reflows. Using each new
+    /// page's first character as the next anchor walks backwards a little on every resize.
+    private var readingAnchor: Int?
     var translatedPage: [String] = []
     var translatedChapterTitle: String = ""
     
@@ -78,34 +85,38 @@ final class ReaderViewModel {
     /// Width of a single text column. Capped at `maxTextWidth` so lines stay readable on
     /// a wide window; `PageView` applies the same cap, so measurement matches rendering.
     var availableContentWidth: CGFloat {
-        let inner: CGFloat
-        if layoutMode == .interleaved {
-            inner = viewSize.width - ReaderLayout.horizontalPadding * 2
-        } else {
-            inner = viewSize.width / 2 - ReaderLayout.horizontalPadding * 2
-        }
-
-        let usable = columnsPerPage == 2
-            ? (inner - ReaderLayout.columnGutter) / 2
-            : inner
-
-        return max(100, min(usable, ReaderLayout.maxTextWidth))
+        ReaderLayout.columnWidth(
+            in: layoutMode == .interleaved ? viewSize.width : viewSize.width / 2,
+            columns: columnsPerPage
+        )
     }
     var navigatingForward: Bool = true
     
     // MARK: - Translation State
     var showSystemTranslation = false
     var textToTranslate = ""
+    #if !os(tvOS)
     var translationService = TranslationService()
-    var ttsService = TTSService()
     var speechService = SpeechRecognitionService()
+    #endif
+    var ttsService = TTSService()
     var isAutoReading = false
-    private var pendingAutoReadAfterTranslation = false
+    /// Translations already made for this book — read before asking the translator, and
+    /// the only source of translations on Apple TV, which has no translator to ask.
+    private var memory = TranslationMemory()
+    private var memoryHasUnsavedEntries = false
 
-    /// Writes down each chapter as the reader finishes it, so the tutor can answer
-    /// "what's happened so far?" from this reading rather than from a vague memory of
-    /// the novel. Lives here because this is what knows when a chapter ends.
-    let storySummarizer = StorySummarizer()
+    var isTranslating: Bool {
+        #if os(tvOS)
+        false
+        #else
+        translationService.isTranslating
+        #endif
+    }
+
+    /// The page has text with no saved translation. Only Apple TV can end up here.
+    var isMissingTranslations = false
+    private var pendingAutoReadAfterTranslation = false
     /// The texts behind the translation currently on screen, so we don't ask twice.
     private var lastTranslationRequest: [String] = []
     
@@ -119,13 +130,25 @@ final class ReaderViewModel {
         showTOC || showThemeSettings
     }
 
-    /// Pointer moved (macOS). Show the chrome, then start the clock again.
+    /// Show controls. Only the Mac hides them automatically after pointer inactivity.
     func noteChromeActivity() {
         if !isChromeVisible {
             withAnimation(.easeOut(duration: 0.2)) { isChromeVisible = true }
         }
+        #if os(macOS)
         scheduleChromeHide()
+        #endif
     }
+
+    #if os(iOS)
+    func toggleReadingControls() {
+        guard !isOverlayPresented else { return }
+        cancelChromeHide()
+        withAnimation(.easeOut(duration: 0.2)) {
+            isChromeVisible.toggle()
+        }
+    }
+    #endif
 
     private func scheduleChromeHide() {
         chromeHideTask?.cancel()
@@ -216,7 +239,7 @@ final class ReaderViewModel {
     /// Character offset of the first unit on the current page — the position we persist.
     var currentOffset: Int {
         guard currentPageIndex >= 0 && currentPageIndex < pages.count else { return 0 }
-        return pages[currentPageIndex].firstOffset
+        return readingAnchor ?? pages[currentPageIndex].firstOffset
     }
 
     /// The page holding a given character offset: the last page that starts at or before it.
@@ -263,9 +286,12 @@ final class ReaderViewModel {
         guard index >= 0 && index < chapters.count else {
             return ""
         }
+        return Self.chapterTitle(of: chapters[index], tableOfContents: tableOfContents)
+    }
 
-        let chapter = chapters[index]
-
+    /// Shared with whole-book translation, which has to translate exactly the headings
+    /// the reader will show.
+    nonisolated static func chapterTitle(of chapter: EPUBService.Chapter, tableOfContents: [EPUBService.TOCItem]) -> String {
         // Try to find matching TOC item by href
         if let tocItem = tableOfContents.first(where: { tocItem in
             chapter.href.contains(tocItem.href) || tocItem.href.contains(chapter.href)
@@ -299,13 +325,7 @@ final class ReaderViewModel {
         if currentPageIndex < pages.count - 1 {
             currentPageIndex += 1
         } else if currentChapterIndex < chapters.count - 1 {
-            // This branch is only reachable from the last page of a chapter, which makes
-            // it the one honest "the reader finished chapter N" event in the app.
-            // Deliberately not fired for a jump from the table of contents: chapters
-            // skipped past were never read, and must never enter the recap.
-            let finished = currentChapterIndex
             currentChapterIndex += 1
-            storySummarizer.noteChapterFinished(finished)
             Task { await loadChapter(at: currentChapterIndex) }
         }
     }
@@ -322,7 +342,7 @@ final class ReaderViewModel {
 
     // MARK: - Data Loading
     
-    func loadBook(book: Book, modelContext: ModelContext? = nil) async {
+    func loadBook(book: Book) async {
         loadError = nil
         do {
             let content = try epubService.parse(epubData: book.epubData)
@@ -332,8 +352,12 @@ final class ReaderViewModel {
             if book.language == nil, let language = content.language {
                 book.language = language
             }
+            memory = TranslationMemory(data: book.translationsData)
+            memoryHasUnsavedEntries = false
             setupTTSCallback()
+            #if !os(tvOS)
             setupSpeechCallback()
+            #endif
             tableOfContents = content.tableOfContents
             currentChapterIndex = book.currentChapterIndex
             fontSize = CGFloat(book.savedFontSize)
@@ -347,16 +371,6 @@ final class ReaderViewModel {
                 await loadChapter(at: currentChapterIndex, start: start)
             }
             isInitialLoadComplete = true
-
-            if let modelContext {
-                // Also backfills: any recent chapter the reader finished before this
-                // feature existed gets summarised now, quietly, in the background.
-                storySummarizer.configure(
-                    book: book,
-                    modelContext: modelContext,
-                    chapters: chapters
-                )
-            }
 
             // If the window reported its real size while the EPUB was still parsing,
             // the pagination above ran against stale geometry. Catch it here instead
@@ -381,8 +395,11 @@ final class ReaderViewModel {
 
     func loadChapter(at index: Int, start: ChapterStart = .beginning) async {
         guard index >= 0 && index < chapters.count else { return }
+        readingAnchor = nil
         translatedPage = []
+        #if !os(tvOS)
         translationService.reset()
+        #endif
         lastTranslationRequest = []
 
         let paragraphs = epubService.extractParagraphs(from: chapters[index].htmlContent)
@@ -396,6 +413,7 @@ final class ReaderViewModel {
             currentPageIndex = max(0, pages.count - 1)
         case .offset(let offset):
             currentPageIndex = pageIndex(containing: offset)
+            readingAnchor = offset
         case .legacyPage(let page):
             currentPageIndex = min(page, max(0, pages.count - 1))
         }
@@ -539,8 +557,9 @@ final class ReaderViewModel {
         for unit in allUnits {
             // A paragraph taller than a whole column has to be broken up, or removing the
             // inner ScrollView would simply cut its tail off.
-            let pieces = unitHeight(unit) > fullHeight
-                ? split(unit, toFit: fullHeight, measure: unitHeight)
+            let limit = columns.isEmpty && column.isEmpty ? budget : fullHeight
+            let pieces = unitHeight(unit) > limit
+                ? split(unit, toFit: limit, measure: unitHeight)
                 : [unit]
 
             for piece in pieces {
@@ -588,7 +607,10 @@ final class ReaderViewModel {
 
         while index < columns.count {
             let end = min(index + stride, columns.count)
-            result.append(Page(columns: Array(columns[index..<end])))
+            var spread = Array(columns[index..<end])
+            // Keep the final, partly empty spread at the same measured column width.
+            while spread.count < stride { spread.append([]) }
+            result.append(Page(columns: spread))
             index = end
         }
 
@@ -605,9 +627,11 @@ final class ReaderViewModel {
         let text = unit.text
         let sentences = SentenceSplitter.sentences(in: text)
 
-        // A single sentence longer than a page is left whole; splitting mid-sentence
-        // would read worse than the rare clipped tail.
-        guard sentences.count > 1 else { return [unit] }
+        // A long sentence still has to fit. Keep normal sentences intact, but split
+        // exceptional ones at word boundaries instead of silently clipping their tails.
+        guard sentences.count > 1 else {
+            return splitWords(unit, toFit: maxHeight, measure: measure)
+        }
 
         var pieces: [TextUnit] = []
         var buffer = ""
@@ -630,7 +654,40 @@ final class ReaderViewModel {
             pieces.append(TextUnit(text: buffer, offset: unit.offset + bufferOffset))
         }
 
-        return pieces.isEmpty ? [unit] : pieces
+        return (pieces.isEmpty ? [unit] : pieces).flatMap { piece in
+            measure(piece) > maxHeight
+                ? splitWords(piece, toFit: maxHeight, measure: measure)
+                : [piece]
+        }
+    }
+
+    private func splitWords(
+        _ unit: TextUnit,
+        toFit maxHeight: CGFloat,
+        measure: (TextUnit) -> CGFloat
+    ) -> [TextUnit] {
+        let words = unit.text.split(whereSeparator: \.isWhitespace)
+        guard let first = words.first else { return [unit] }
+        var start = first.startIndex
+        var end = first.endIndex
+        var pieces: [TextUnit] = []
+
+        func piece(endingAt boundary: String.Index) -> TextUnit {
+            TextUnit(
+                text: String(unit.text[start..<boundary]),
+                offset: unit.offset + unit.text.distance(from: unit.text.startIndex, to: start)
+            )
+        }
+
+        for word in words.dropFirst() {
+            if measure(piece(endingAt: word.endIndex)) > maxHeight {
+                pieces.append(piece(endingAt: end))
+                start = word.startIndex
+            }
+            end = word.endIndex
+        }
+        pieces.append(piece(endingAt: end))
+        return pieces
     }
 
     /// Re-flow the text, keeping the reader on the same sentence.
@@ -638,6 +695,7 @@ final class ReaderViewModel {
         let anchor = currentOffset
         paginateContent()
         currentPageIndex = pageIndex(containing: anchor)
+        readingAnchor = anchor
     }
     
     // MARK: - Translation
@@ -656,11 +714,40 @@ final class ReaderViewModel {
         guard textsToTranslate != lastTranslationRequest else { return }
         lastTranslationRequest = textsToTranslate
 
+        // Pages already translated — on this device, or by the Mac before sending the
+        // book to the TV — show instantly, offline, without asking the translator again.
+        let saved = textsToTranslate.map { memory.translation(of: $0) }
+        #if os(tvOS)
+        isMissingTranslations = saved.contains(nil)
+        applyTranslations(saved.map { $0 ?? "" })
+        #else
+        if saved.allSatisfy({ $0 != nil }) {
+            applyTranslations(saved.map { $0 ?? "" })
+            return
+        }
+
         translationService.requestTranslation(
             texts: textsToTranslate,
             from: nil,
             to: .from("en")
         )
+        #endif
+    }
+
+    /// Puts a page's translations on screen. `results` lines up with the texts last
+    /// requested: the chapter title first on a chapter's opening page, then the page.
+    private func applyTranslations(_ results: [String]) {
+        if currentPageIndex == 0 && !currentChapterTitle.isEmpty && !results.isEmpty {
+            translatedChapterTitle = results[0]
+            translatedPage = Array(results.dropFirst())
+        } else {
+            translatedPage = results
+        }
+
+        if pendingAutoReadAfterTranslation {
+            pendingAutoReadAfterTranslation = false
+            startPlayingCurrentPage()
+        }
     }
     
     /// The translation failure to show the reader, if any.
@@ -668,6 +755,7 @@ final class ReaderViewModel {
     /// Apple's own message is usually terse ("The operation couldn't be completed"), and by
     /// far the most common cause is simply that the language pair hasn't been downloaded yet
     /// — which is fixable in System Settings, so say so.
+    #if !os(tvOS)
     var translationErrorMessage: String? {
         guard let error = translationService.error else { return nil }
 
@@ -698,24 +786,14 @@ final class ReaderViewModel {
         let delivered = translationService.results.map(\.original)
         guard !delivered.isEmpty, delivered == lastTranslationRequest else { return }
 
-        // Separate chapter title from page content if on first page
-        if currentPageIndex == 0 && !currentChapterTitle.isEmpty {
-            let results = translationService.translatedTexts
-            if !results.isEmpty {
-                translatedChapterTitle = results[0]
-                translatedPage = Array(results.dropFirst())
-            } else {
-                translatedPage = results
-            }
-        } else {
-            translatedPage = translationService.translatedTexts
+        for result in translationService.results {
+            memory.record(result.original, result.translated)
         }
-        
-        if pendingAutoReadAfterTranslation {
-            pendingAutoReadAfterTranslation = false
-            startPlayingCurrentPage()
-        }
+        memoryHasUnsavedEntries = true
+
+        applyTranslations(translationService.translatedTexts)
     }
+    #endif
     
     // MARK: - Text-To-Speech
     
@@ -731,6 +809,7 @@ final class ReaderViewModel {
         }
     }
     
+    #if !os(tvOS)
     private func setupSpeechCallback() {
         speechService.onCommandRecognized = { [weak self] command in
             guard let self = self else { return }
@@ -746,6 +825,7 @@ final class ReaderViewModel {
             }
         }
     }
+    #endif
     
     func toggleReading() {
         if ttsService.isPlaying {
@@ -825,6 +905,7 @@ final class ReaderViewModel {
         allUnits = buildUnits(from: paragraphs, chapterTitle: currentChapterTitle)
         paginateContent()
         currentPageIndex = pageIndex(containing: anchor)
+        readingAnchor = anchor
         translateCurrentPage()
 
         Task { [weak self] in
@@ -888,6 +969,10 @@ final class ReaderViewModel {
         book.savedThemeName = currentTheme.rawValue
         book.savedLayoutMode = layoutMode.rawValue
         book.lastReadDate = Date()
+        if memoryHasUnsavedEntries {
+            book.translationsData = memory.encoded()
+            memoryHasUnsavedEntries = false
+        }
         try? modelContext.save()
     }
 }

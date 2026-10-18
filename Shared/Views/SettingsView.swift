@@ -7,28 +7,9 @@ import SwiftUI
 /// by the same AppStorage key, so they can't disagree.
 struct SettingsView: View {
     @AppStorage("ttsLanguage") private var ttsLanguageRaw = TTSLanguage.both.rawValue
-    @AppStorage("wikipediaLookupEnabled") private var wikipediaLookup = true
 
     var body: some View {
         Form {
-            Section {
-                Toggle("Look things up on Wikipedia", isOn: $wikipediaLookup)
-            } header: {
-                Text("Tutor")
-            } footer: {
-                // Honest about the one thing in this app that leaves the machine. The
-                // model itself is local; this is the exception, and it's small: names,
-                // not the book and not the questions.
-                Text("""
-                The tutor can't remember much about a book's history or its author on \
-                its own, so it fetches Wikipedia's article on the book and the author \
-                once when you import it, and looks up names and terms as you ask about \
-                them. Only those names are sent to Wikipedia — never the pages you're \
-                reading, and never your questions.
-                """)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
             Section {
                 Picker("Read", selection: $ttsLanguageRaw) {
                     ForEach(TTSLanguage.allCases) { lang in
@@ -38,6 +19,7 @@ struct SettingsView: View {
             } header: {
                 Text("Read Aloud")
             } footer: {
+                #if os(macOS)
                 Text("""
                 Narration uses the best system voice installed. The built-in defaults \
                 are the robotic ones — for a far better narrator, download enhanced \
@@ -46,12 +28,18 @@ struct SettingsView: View {
                 them up automatically.
                 """)
                 .fixedSize(horizontal: false, vertical: true)
+                #else
+                Text("Narration uses the best system voice installed. Download enhanced French and English voices in Settings → Accessibility → Read & Speak → Voices. LingoBook picks them up automatically.")
+                    .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        #if os(macOS)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        #endif
     }
 }
 

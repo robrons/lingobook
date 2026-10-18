@@ -84,7 +84,20 @@ private final class AudioSpeechEngine: @unchecked Sendable {
             let authorized = status == .authorized
             onAuthorizationResult(authorized)
             guard authorized else { self.isActive = false; onStopped(); return }
+            #if os(iOS)
+            AVAudioApplication.requestRecordPermission { [weak self] granted in
+                guard let self, self.isActive else { return }
+                guard granted else {
+                    self.isActive = false
+                    onAuthorizationResult(false)
+                    onStopped()
+                    return
+                }
+                self.beginRecording()
+            }
+            #else
             self.beginRecording()
+            #endif
         }
     }
 
@@ -104,6 +117,18 @@ private final class AudioSpeechEngine: @unchecked Sendable {
 
     private func beginRecording() {
         guard isActive, !audioEngine.isRunning else { return }
+
+        #if os(iOS)
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
+            try session.setActive(true)
+        } catch {
+            isActive = false
+            stoppedHandler?()
+            return
+        }
+        #endif
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true

@@ -2,8 +2,13 @@ import Foundation
 import CoreGraphics
 import SwiftUI
 
+#if os(macOS)
 import AppKit
 public typealias PlatformFont = NSFont
+#else
+import UIKit
+public typealias PlatformFont = UIFont
+#endif
 
 /// Page metrics shared by `PageView` (which renders) and `ReaderViewModel` (which
 /// paginates). Both read from here: if the two disagree, text either clips at the
@@ -11,17 +16,30 @@ public typealias PlatformFont = NSFont
 enum ReaderLayout {
     /// Comfortable measure, ~65–75 characters a line. Without a cap, a full-screen
     /// Mac window stretches lines past 90 characters and reading falls apart.
+    #if os(tvOS)
+    // Type on a television is roughly twice the size, so the same ~70-character measure
+    // needs twice the width.
+    static let maxTextWidth: CGFloat = 1300
+    #else
     static let maxTextWidth: CGFloat = 650
+    #endif
 
     /// Measured from Apple Books showing the same book on a 1470pt-wide display: 88pt of
     /// margin either side. Generous framing is most of why a page reads as a page rather
     /// than as a document — Books gives its text *less* room than this app used to, and
     /// looks the better for it.
+    #if os(macOS)
     static let horizontalPadding: CGFloat = 88
+    #elseif os(tvOS)
+    // On top of the TV's own safe-area inset, which already keeps clear of the bezel.
+    static let horizontalPadding: CGFloat = 40
+    #else
+    static let horizontalPadding: CGFloat = 28
+    #endif
 
-    /// Books runs ~112pt above its first line and ~140pt below its last. With the chrome
-    /// insets below, 56 lands the text at 110/114 — near enough to read the same.
-    static let verticalPadding: CGFloat = 56
+    /// A little breathing room in addition to the controls, not a second full margin.
+    /// Reserving 56 points above AND below the chrome cost 112 points of reading height.
+    static let verticalPadding: CGFloat = 16
 
     /// Gap between the two columns of an interleaved spread. Books uses ~99pt; below
     /// about this the eye starts jumping the gutter mid-line.
@@ -32,7 +50,12 @@ enum ReaderLayout {
     /// Raised from 1000, where a 1032pt window cleared the bar and then split into two
     /// 380pt columns of about 35 characters — too narrow to read. Books waits for real
     /// width before going to two columns, and at 1200 so does this.
+    #if os(tvOS)
+    // One wide column reads better from across the room than two narrow ones.
+    static let twoColumnMinWidth: CGFloat = .greatestFiniteMagnitude
+    #else
     static let twoColumnMinWidth: CGFloat = 1200
+    #endif
 
     /// Room kept for the toolbar and scrubber that float above the page.
     ///
@@ -40,15 +63,31 @@ enum ReaderLayout {
     /// point: the text's geometry can't depend on chrome visibility, or every fade
     /// would repaginate the chapter and shuffle the reader's place.
     ///
-    /// Sized from what the chrome actually measures, with a little slack — the toolbar
-    /// runs ~50pt (12 + 8 padding around a ~30pt row) and the scrubber ~53pt (22pt track
-    /// + 7 + ~14pt labels + 10 padding). Erring small would tuck text under the bars.
+    /// The toolbar needs 54 points; the footer is now just a label with bottom padding.
+    /// Do not keep reserving the removed scrubber's 58-point height.
+    #if os(macOS)
     static let chromeTopInset: CGFloat = 54
+    static let chromeBottomInset: CGFloat = 30
+    #elseif os(tvOS)
+    // No toolbar above the page; a single status line below it.
+    static let chromeTopInset: CGFloat = 0
+    static let chromeBottomInset: CGFloat = 40
+    #else
+    static let chromeTopInset: CGFloat = 64
+    // A 44-point button row plus 14 points below it, kept constant when hidden.
     static let chromeBottomInset: CGFloat = 58
+    #endif
 
     static var topContentInset: CGFloat { verticalPadding + chromeTopInset }
     static var bottomContentInset: CGFloat { verticalPadding + chromeBottomInset }
     static var totalVerticalInset: CGFloat { topContentInset + bottomContentInset }
+
+    /// Shared by measurement and rendering, including at widths above the line-length cap.
+    static func columnWidth(in pageWidth: CGFloat, columns: Int) -> CGFloat {
+        let count = max(1, columns)
+        let inner = pageWidth - horizontalPadding * 2 - CGFloat(count - 1) * columnGutter
+        return max(1, min(inner / CGFloat(count), maxTextWidth))
+    }
 
     static let paragraphSpacing: CGFloat = 16
     static let bodyLineSpacing: CGFloat = 6
@@ -81,7 +120,11 @@ enum ReaderLayout {
 /// Measured and rendered can no longer disagree, because they are the same code path.
 @MainActor
 enum ReaderTextMeasurer {
+    #if os(macOS)
     private static let hosting = NSHostingController(rootView: AnyView(EmptyView()))
+    #else
+    private static let hosting = UIHostingController(rootView: AnyView(EmptyView()))
+    #endif
 
     /// Pagination re-measures the same sentences on every pass (and `split` measures
     /// candidates repeatedly). Hosting-controller layout isn't free, so memoise.
@@ -231,10 +274,18 @@ enum TextMeasurement {
         }
 
         if italic {
+            #if os(macOS)
             descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.italic))
+            #else
+            descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) ?? descriptor
+            #endif
         }
 
+        #if os(macOS)
         return NSFont(descriptor: descriptor, size: size) ?? base
+        #else
+        return UIFont(descriptor: descriptor, size: size)
+        #endif
     }
 
     /// Height of `text` laid out in a column `width` points wide, with SwiftUI's

@@ -2,7 +2,11 @@ import SwiftUI
 import CoreText
 import NaturalLanguage
 
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Body text set the way a book sets it: justified, with hyphenation.
 ///
@@ -97,7 +101,11 @@ enum JustifiedTextStyle {
             .paragraphStyle: paragraphStyle
         ]
 
+        #if os(macOS)
         attributes[.foregroundColor] = NSColor(color)
+        #else
+        attributes[.foregroundColor] = UIColor(color)
+        #endif
 
         if let language = language(of: text) {
             attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language
@@ -109,6 +117,7 @@ enum JustifiedTextStyle {
 
 // MARK: - Platform text view
 
+#if os(macOS)
 private struct JustifiedTextRepresentable: NSViewRepresentable {
     let attributed: NSAttributedString
 
@@ -116,6 +125,14 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
         let view = NSTextField(labelWithString: "")
         view.isEditable = false
         view.isSelectable = true
+        // Clicking a selectable NSTextField hands the text to the window's shared field
+        // editor for the duration of the selection. In plain-text mode that editor keeps
+        // none of the attributed string: it redraws using the *control's* own font and
+        // colour, so a click dropped a 20pt justified New York page to 13pt ragged system
+        // text until the selection was dismissed. Rich-text mode is what carries the
+        // attributes across, and it costs nothing here — the field is not editable, so
+        // there is no rich-text editing to enable, only rich-text display.
+        view.allowsEditingTextAttributes = true
         view.isBezeled = false
         view.drawsBackground = false
         view.lineBreakMode = .byWordWrapping
@@ -128,6 +145,14 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
 
     func updateNSView(_ view: NSTextField, context: Context) {
         view.attributedStringValue = attributed
+
+        // The control's own font and colour are what the field editor falls back to. They
+        // are redundant while rich text holds, and they are the difference between a
+        // wrong-sized page and a merely unjustified one if it ever doesn't.
+        if attributed.length > 0 {
+            view.font = attributed.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+            view.textColor = attributed.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextField, context: Context) -> CGSize? {
@@ -137,4 +162,34 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
         return CGSize(width: width, height: ceil(fitted.height))
     }
 }
+#else
+private struct JustifiedTextRepresentable: UIViewRepresentable {
+    let attributed: NSAttributedString
 
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        #if !os(tvOS)
+        view.isEditable = false
+        #endif
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.backgroundColor = .clear
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.setContentCompressionResistancePriority(.required, for: .vertical)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        if view.attributedText != attributed {
+            view.attributedText = attributed
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: ceil(fitted.height))
+    }
+}
+#endif

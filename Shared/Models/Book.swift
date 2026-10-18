@@ -33,35 +33,31 @@ final class Book {
     /// Wikipedia to fall back to, and to stop asserting that every page is French.
     var language: String?
 
-    /// Wikipedia's account of the book and of its author, fetched once at import.
-    ///
-    /// Stored rather than looked up per question: it never changes, and a reader who is
-    /// offline on a train should still get the publication history right.
-    var aboutBook: String?
-    var aboutAuthor: String?
-    /// The article URLs behind the two fields above, newline-separated. Attribution, and
-    /// the beginning of a way to refresh a bad match.
-    var aboutSources: String?
-    /// When grounding was last attempted, successfully or not. Stops a book with no
-    /// Wikipedia article from asking again on every single open.
-    var groundingAttemptedAt: Date?
+    // MARK: - Saved translations
 
-    /// Everything that happened before the recent chapters, folded into one paragraph.
+    /// Every translation made for this book, encoded `TranslationMemory`.
     ///
-    /// See `StorySummarizer`: without compaction a long book's recap grows until it
-    /// crowds out the page the reader is on.
-    var storyDigest: String?
-    /// The last chapter index the digest covers. -1 means nothing has been folded in yet.
-    var digestThroughChapter: Int = -1
+    /// Filled a page at a time as you read on a Mac or iPad, or all at once by "Send to
+    /// Apple TV" — the TV can't translate, so it reads only what arrives here.
+    @Attribute(.externalStorage) var translationsData: Data?
+
+    /// Where this book stands with the Apple TV. Raw `AppleTVStatus`; only the Mac sets it.
+    var appleTVStatusRaw: String = AppleTVStatus.none.rawValue
+
+    var appleTVStatus: AppleTVStatus {
+        get { AppleTVStatus(rawValue: appleTVStatusRaw) ?? .none }
+        set { appleTVStatusRaw = newValue.rawValue }
+    }
 
     init(
+        id: UUID = UUID(),
         title: String,
         author: String,
         epubData: Data,
         coverData: Data? = nil,
         language: String? = nil
     ) {
-        self.id = UUID()
+        self.id = id
         self.title = title
         self.author = author
         self.epubData = epubData
@@ -73,9 +69,18 @@ final class Book {
         self.currentOffset = 0
         self.readingProgress = 0
         self.totalChapters = 0
+        #if os(tvOS)
+        // Read from the sofa, not from arm's length.
+        self.savedFontSize = 34.0
+        #else
         self.savedFontSize = 17.0
+        #endif
         self.savedThemeName = BookTheme.calm.rawValue
+        #if os(macOS)
         self.savedLayoutMode = LayoutMode.sideBySide.rawValue
+        #else
+        self.savedLayoutMode = LayoutMode.interleaved.rawValue
+        #endif
     }
     
     /// Returns the cover as a platform-appropriate image
@@ -102,19 +107,6 @@ final class Book {
         Int((readingProgress * 100).rounded())
     }
 
-    /// The background the tutor is given about this book, or nil when the lookup found
-    /// nothing it was confident about.
-    var aboutBlock: String? {
-        var parts: [String] = []
-        if let aboutBook, !aboutBook.isEmpty {
-            parts.append("About “\(title)”: \(aboutBook)")
-        }
-        if let aboutAuthor, !aboutAuthor.isEmpty {
-            parts.append("About \(author): \(aboutAuthor)")
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
-    }
-
     /// How the book announces itself to VoiceOver.
     ///
     /// Everything the card shows visually, in a single phrase. A cover made of separate
@@ -127,6 +119,18 @@ final class Book {
         }
         return parts.joined(separator: ", ")
     }
+}
+
+/// A book's journey to the Apple TV, as the Mac sees it.
+enum AppleTVStatus: String {
+    /// Never sent.
+    case none
+    /// Translating the whole book before it can go.
+    case preparing
+    /// Translated; goes the next time an Apple TV running LingoBook is on the network.
+    case waiting
+    /// The TV confirmed it has the book.
+    case sent
 }
 
 /// Reader layout options

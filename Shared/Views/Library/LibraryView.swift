@@ -2,7 +2,9 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+#if os(macOS)
 import AppKit
+#endif
 
 /// How the shelf is ordered. Persisted, because a sort you have to re-pick every launch
 /// isn't really a preference.
@@ -42,6 +44,8 @@ struct LibraryView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var showImporter = false
+    @State private var showSettings = false
     /// Title of a book the reader tried to import twice. Not an error — just a nudge.
     @State private var duplicateTitle: String?
 
@@ -99,8 +103,12 @@ struct LibraryView: View {
 
     var body: some View {
         ZStack {
+            #if os(macOS)
             VisualEffectBackground()
                 .ignoresSafeArea()
+            #else
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            #endif
 
             if books.isEmpty {
                 emptyLibrary
@@ -113,7 +121,33 @@ struct LibraryView: View {
         .navigationTitle("Library")
         .searchable(text: $searchText, prompt: "Search by title or author")
         .toolbar { toolbarContent }
+        #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
+        #else
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.epub]) { result in
+            switch result {
+            case .success(let url):
+                Task { await loadBook(from: url) }
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
+        .onOpenURL { url in
+            guard url.pathExtension.lowercased() == "epub" else { return }
+            Task { await loadBook(from: url) }
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showSettings = false }
+                        }
+                    }
+            }
+        }
+        #endif
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { providers in
             handleDrop(providers: providers)
         }
@@ -142,6 +176,13 @@ struct LibraryView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) {
+            Button { showSettings = true } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+        }
+        #endif
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Picker("Sort By", selection: $sortRaw) {
@@ -209,23 +250,43 @@ struct LibraryView: View {
             ForEach(visibleBooks) { book in
                 Button { navigationPath.append(book) } label: {
                     BookCard(book: book)
+                        #if os(macOS)
+                        .overlay(alignment: .topLeading) { AppleTVBadge(book: book) }
+                        #endif
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opens the book")
-                .contextMenu { deleteButton(for: book) }
+                .contextMenu {
+                    #if os(macOS)
+                    sendToAppleTVButton(for: book)
+                    Divider()
+                    #endif
+                    deleteButton(for: book)
+                }
             }
         }
     }
 
+    #if os(macOS)
+    /// Translates the whole book, then sends it to the Apple TV — which can't translate.
+    @ViewBuilder
+    private func sendToAppleTVButton(for book: Book) -> some View {
+        let preparer = BookPreparer.shared
+        Button {
+            preparer.sendToAppleTV(book)
+        } label: {
+            Label(
+                book.appleTVStatus == .sent ? "Send to Apple TV Again" : "Send to Apple TV",
+                systemImage: "appletv"
+            )
+        }
+        .disabled(preparer.isPreparing(book) || book.appleTVStatus == .waiting)
+    }
+    #endif
+
     private func deleteButton(for book: Book) -> some View {
         Button(role: .destructive) {
-            withAnimation {
-                // The chapter summaries are keyed to the book by id, not by a SwiftData
-                // relationship, so nothing cascades — they'd outlive the book they
-                // describe and quietly accumulate.
-                BookGrounding.deleteSummaries(for: book, modelContext: modelContext)
-                modelContext.delete(book)
-            }
+            withAnimation { modelContext.delete(book) }
         } label: {
             Label("Delete", systemImage: "trash")
         }
@@ -284,9 +345,14 @@ struct LibraryView: View {
     // MARK: - Actions
 
     private func startImport() {
+        #if os(macOS)
         openFilePicker()
+        #else
+        showImporter = true
+        #endif
     }
 
+    #if os(macOS)
     private func openFilePicker() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.epub]
@@ -297,6 +363,7 @@ struct LibraryView: View {
             Task { await loadBook(from: url) }
         }
     }
+    #endif
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
@@ -312,8 +379,11 @@ struct LibraryView: View {
     }
 
     private func loadBook(from url: URL) async {
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
         do {
             let data = try Data(contentsOf: url)
@@ -336,11 +406,6 @@ struct LibraryView: View {
 
             modelContext.insert(book)
             try modelContext.save()
-
-            // One request per book, ever. From here on the tutor can answer questions
-            // about the book's history and its author from something better than an 8B
-            // model's recollection — and it works offline afterwards.
-            BookGrounding.groundIfNeeded(book, modelContext: modelContext)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -399,83 +464,9 @@ private struct ContinueReadingCard: View {
     }
 }
 
-extension Color {
-    /// A shelf-friendly tint chosen by hashing the title.
-    ///
-    /// Hashing rather than randomising so the same book is the same colour every
-    /// launch; the palette is Books-ish board colours, dark enough for white text.
-    static func generatedCoverTint(for title: String) -> Color {
-        let palette: [Color] = [
-            Color(red: 0.13, green: 0.42, blue: 0.22),  // bottle green
-            Color(red: 0.16, green: 0.32, blue: 0.52),  // ink blue
-            Color(red: 0.52, green: 0.20, blue: 0.16),  // brick
-            Color(red: 0.36, green: 0.26, blue: 0.47),  // plum
-            Color(red: 0.55, green: 0.38, blue: 0.12),  // ochre
-            Color(red: 0.14, green: 0.38, blue: 0.40)   // teal
-        ]
-        // A stable hash: Swift's hashValue is seeded per-launch, which would repaint
-        // the shelf on every start.
-        let stable = title.unicodeScalars.reduce(5381 as UInt64) { ($0 << 5) &+ $0 &+ UInt64($1.value) }
-        return palette[Int(stable % UInt64(palette.count))]
-    }
-}
-
-/// The cover art, or a stand-in when the EPUB didn't carry one.
-struct BookCover: View {
-    let book: Book
-
-    var body: some View {
-        if let coverImage = book.coverImage {
-            Image(nsImage: coverImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            // Books' treatment of a coverless book: a solid tinted board with the title
-            // set on it in serif caps, so the cover itself says which book this is. The
-            // tint is derived from the title, stable across launches, so each book keeps
-            // its own colour and a shelf of stand-ins doesn't read as one orange blur.
-            let tint = Color.generatedCoverTint(for: book.title)
-
-            LinearGradient(
-                colors: [tint, tint.opacity(0.75)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay {
-                GeometryReader { geo in
-                    VStack(spacing: geo.size.height * 0.04) {
-                        Spacer()
-
-                        Text(book.title)
-                            .font(.system(size: geo.size.height * 0.11, design: .serif))
-                            .fontWeight(.medium)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(4)
-                            .minimumScaleFactor(0.6)
-
-                        Spacer()
-
-                        Text(book.author)
-                            .font(.system(size: geo.size.height * 0.055, design: .serif))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(1)
-                            .opacity(0.85)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, geo.size.width * 0.1)
-                    .padding(.vertical, geo.size.height * 0.08)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                }
-            }
-            // The card announces title and author itself; repeating them here would make
-            // VoiceOver read every book twice.
-            .accessibilityHidden(true)
-        }
-    }
-}
-
 // MARK: - Visual Effect Background (macOS only)
 
+#if os(macOS)
 struct VisualEffectBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
@@ -488,6 +479,7 @@ struct VisualEffectBackground: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
+#endif
 
 #Preview {
     NavigationStack {

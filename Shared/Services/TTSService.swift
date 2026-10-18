@@ -64,6 +64,7 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
 
     func play(originalParagraphs: [String], englishParagraphs: [String], title: String = "") {
         stop()
+        prepareAudioSession()
         wasManuallyStopped = false
         isPlaying = true
         nowPlayingTitle = title
@@ -115,6 +116,7 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         guard !trimmed.isEmpty else { return }
 
         stop()
+        prepareAudioSession()
         wasManuallyStopped = false
         isSpeakingAside = true
         isPlaying = true
@@ -137,6 +139,18 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         isPaused = false
         isSpeakingAside = false
         clearNowPlaying()
+    }
+
+    private func prepareAudioSession() {
+        #if !os(macOS)
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio)
+            try session.setActive(true)
+        } catch {
+            print("LingoBook: could not prepare narration audio: \(error)")
+        }
+        #endif
     }
 
     func pause() {

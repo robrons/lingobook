@@ -52,8 +52,9 @@ struct PageView: View {
     }
 
     private var pageContent: some View {
-        columnLayout
-            .padding(.horizontal, ReaderLayout.horizontalPadding)
+        GeometryReader { geometry in
+            columnLayout(width: geometry.size.width)
+        }
             .padding(.top, ReaderLayout.topContentInset)
             .padding(.bottom, ReaderLayout.bottomContentInset)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -62,20 +63,22 @@ struct PageView: View {
     }
 
     @ViewBuilder
-    private var columnLayout: some View {
+    private func columnLayout(width: CGFloat) -> some View {
         if columns.count <= 1 {
             // Cap the measure, then centre that column in whatever space is left.
             column(at: 0)
-                .frame(maxWidth: ReaderLayout.maxTextWidth, alignment: .leading)
+                .frame(width: ReaderLayout.columnWidth(in: width, columns: 1), alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
         } else {
             HStack(alignment: .top, spacing: ReaderLayout.columnGutter) {
                 ForEach(columns.indices, id: \.self) { index in
                     column(at: index)
-                        .frame(maxWidth: ReaderLayout.maxTextWidth, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: ReaderLayout.columnWidth(in: width, columns: columns.count), alignment: .leading)
                 }
             }
+            // Centre the spread as a whole. Expanding each column independently added
+            // its unused width to the gutter and left the right margin larger than the left.
+            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
@@ -131,7 +134,6 @@ struct PageView: View {
                 .padding(.bottom, layoutMode == .interleaved ? ReaderLayout.interleavedPairBottomPadding : 0)
             }
 
-            Spacer(minLength: 0)
         }
     }
 }

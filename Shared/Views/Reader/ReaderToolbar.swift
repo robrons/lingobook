@@ -11,8 +11,6 @@ struct ReaderToolbar: View {
     let isListening: Bool
     let onToggleListening: () -> Void
     @Binding var showThemeSettings: Bool
-    let isTutorVisible: Bool
-    let onToggleTutor: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
@@ -28,6 +26,7 @@ struct ReaderToolbar: View {
                             .font(.system(size: 15, weight: .regular))
                     }
                     .padding(.vertical, 6)
+                    .readerTouchTarget()
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -36,9 +35,11 @@ struct ReaderToolbar: View {
                 Button(action: onShowTOC) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
+                        .readerTouchTarget()
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.textColor.opacity(0.7))
+                .accessibilityLabel("Table of contents")
             }
             
             Spacer()
@@ -51,38 +52,34 @@ struct ReaderToolbar: View {
             
             Spacer()
             
-            // Right side: Mic + Audio + Tutor + AA
+            // Right side: Mic + Audio + AA
             HStack(spacing: 16) {
                 Button(action: onToggleListening) {
                     Image(systemName: isListening ? "mic.fill" : "mic")
                         .font(.system(size: 14))
                         .foregroundStyle(isListening ? .red : theme.textColor.opacity(0.7))
+                        .readerTouchTarget()
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isListening ? "Stop voice commands" : "Voice commands")
                 
                 Button(action: onToggleRead) {
                     Image(systemName: isReading ? "stop.circle.fill" : "speaker.wave.2")
                         .font(.system(size: 14))
                         .foregroundStyle(isReading ? .red : theme.textColor.opacity(0.7))
+                        .readerTouchTarget()
                 }
                 .buttonStyle(.plain)
-                
-                // Mac only: the tutor talks to a model running on this machine.
-                Button(action: onToggleTutor) {
-                    Image(systemName: isTutorVisible ? "text.bubble.fill" : "text.bubble")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.textColor.opacity(isTutorVisible ? 1 : 0.7))
-                .help("Ask about this page (⌘⇧T)")
-                .accessibilityLabel(isTutorVisible ? "Hide tutor" : "Ask about this page")
+                .accessibilityLabel(isReading ? "Stop reading" : "Read aloud")
 
                 Button { showThemeSettings.toggle() } label: {
                     Text("AA")
                         .font(.system(size: 14, weight: .medium))
+                        .readerTouchTarget()
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.textColor.opacity(0.7))
+                .accessibilityLabel("Reading appearance")
             }
         }
         .padding(.horizontal, 20)
@@ -101,6 +98,17 @@ struct ReaderToolbar: View {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func readerTouchTarget() -> some View {
+        #if os(iOS)
+        self.frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+        #else
+        self
+        #endif
+    }
+}
+
 #Preview {
     ReaderToolbar(
         bookTitle: "Le Comte de Monte-Cristo",
@@ -111,8 +119,6 @@ struct ReaderToolbar: View {
         onToggleRead: {},
         isListening: false,
         onToggleListening: {},
-        showThemeSettings: .constant(false),
-        isTutorVisible: false,
-        onToggleTutor: {}
+        showThemeSettings: .constant(false)
     )
 }

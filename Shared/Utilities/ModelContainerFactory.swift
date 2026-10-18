@@ -10,7 +10,7 @@ enum ModelContainerFactory {
 
     @MainActor
     static func makeContainer() -> ModelContainer {
-        let schema = Schema([Book.self, ChapterSummary.self])
+        let schema = Schema([Book.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

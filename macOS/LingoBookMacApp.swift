@@ -8,6 +8,7 @@ struct LingoBookMacApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .modifier(AppleTVBridge())
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.hiddenTitleBar)
