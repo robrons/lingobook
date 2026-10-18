@@ -107,11 +107,12 @@ struct TVReaderView: View {
         .focusable(!showControls)
         .focused($focus, equals: .page)
         .focusEffectDisabled()
+        // Swipe the way you would on a touchscreen: swiping left pulls the next page in.
         .onMoveCommand { direction in
             switch direction {
-            case .left where viewModel.canGoPrevious:
+            case .right where viewModel.canGoPrevious:
                 withAnimation(.easeInOut(duration: 0.3)) { viewModel.goToPreviousPage() }
-            case .right where viewModel.canGoNext:
+            case .left where viewModel.canGoNext:
                 withAnimation(.easeInOut(duration: 0.3)) { viewModel.goToNextPage() }
             default:
                 break
