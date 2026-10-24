@@ -33,6 +33,10 @@ struct JustifiedText: View {
     var italic: Bool = false
     var lineSpacing: CGFloat
     var color: Color
+    var style = ReadingStyle()
+    var firstLineIndent: CGFloat = 0
+    /// Draw only this many lines: the part of a paragraph that ends a page.
+    var lineLimit: Int? = nil
 
     var body: some View {
         JustifiedTextRepresentable(
@@ -42,8 +46,11 @@ struct JustifiedText: View {
                 weight: weight,
                 italic: italic,
                 lineSpacing: lineSpacing,
-                color: color
-            )
+                color: color,
+                style: style,
+                firstLineIndent: firstLineIndent
+            ),
+            lineLimit: lineLimit
         )
     }
 }
@@ -55,6 +62,18 @@ struct JustifiedText: View {
 enum JustifiedTextStyle {
 
     @MainActor private static var languageCache: [String: String] = [:]
+
+    /// The character an attachment occupies in the string — what an indent adds.
+    static let indentMark = "\u{FFFC}"
+
+    /// A transparent pixel, stretched to an indent's width.
+    @MainActor static let blank: PlatformImage = {
+        #if os(macOS)
+        NSImage(size: NSSize(width: 1, height: 1))
+        #else
+        UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+        #endif
+    }()
 
     /// The language the text is written in, for hyphenation.
     ///
@@ -85,19 +104,21 @@ enum JustifiedTextStyle {
         weight: PlatformFont.Weight,
         italic: Bool,
         lineSpacing: CGFloat,
-        color: Color
+        color: Color,
+        style: ReadingStyle = ReadingStyle(),
+        firstLineIndent: CGFloat = 0
     ) -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .justified
+        paragraphStyle.alignment = style.justified ? .justified : .natural
         paragraphStyle.lineSpacing = lineSpacing
         paragraphStyle.lineBreakMode = .byWordWrapping
         // Full hyphenation. Without it, justifying a narrow column opens rivers of white
         // space between words — the reason justified web text usually looks worse than
         // ragged, and the reason print has always hyphenated.
-        paragraphStyle.hyphenationFactor = 1.0
+        paragraphStyle.hyphenationFactor = style.justified ? 1.0 : 0.0
 
         var attributes: [NSAttributedString.Key: Any] = [
-            .font: TextMeasurement.serifFont(size: fontSize, weight: weight, italic: italic),
+            .font: style.font.platformFont(size: fontSize, weight: style.weight(weight), italic: italic),
             .paragraphStyle: paragraphStyle
         ]
 
@@ -111,7 +132,39 @@ enum JustifiedTextStyle {
             attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = language
         }
 
-        return NSAttributedString(string: text, attributes: attributes)
+        let kern = style.kern(size: fontSize)
+        if kern > 0 { attributes[.kern] = kern }
+
+        let result = NSMutableAttributedString(string: text, attributes: attributes)
+
+        // The indent is a blank inline image as wide as the indent — not
+        // `firstLineHeadIndent`, which the tvOS text view lays out but then draws from the
+        // margin, stretching the shortened first line across the full measure. (A kerned
+        // zero-width character fares no better: it's dropped before drawing, kern and
+        // all.) Justification never stretches an attachment.
+        if firstLineIndent > 0 {
+            let attachment = NSTextAttachment()
+            attachment.image = JustifiedTextStyle.blank
+            attachment.bounds = CGRect(x: 0, y: 0, width: firstLineIndent, height: 1)
+            let lead = NSMutableAttributedString(attachment: attachment)
+            lead.addAttributes(attributes, range: NSRange(location: 0, length: lead.length))
+            result.insert(lead, at: 0)
+        }
+
+        // No attribute widens only the spaces between words, but kerning a space widens
+        // the gap after it — which is all word spacing is.
+        let gap = style.wordGap(size: fontSize)
+        if gap > 0 {
+            let nsText = text as NSString
+            var range = nsText.range(of: " ")
+            while range.location != NSNotFound {
+                result.addAttribute(.kern, value: kern + gap, range: range)
+                let next = range.location + 1
+                range = nsText.range(of: " ", range: NSRange(location: next, length: nsText.length - next))
+            }
+        }
+
+        return result
     }
 }
 
@@ -120,6 +173,7 @@ enum JustifiedTextStyle {
 #if os(macOS)
 private struct JustifiedTextRepresentable: NSViewRepresentable {
     let attributed: NSAttributedString
+    var lineLimit: Int? = nil
 
     func makeNSView(context: Context) -> NSTextField {
         let view = NSTextField(labelWithString: "")
@@ -144,6 +198,7 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSTextField, context: Context) {
+        view.maximumNumberOfLines = lineLimit ?? 0
         view.attributedStringValue = attributed
 
         // The control's own font and colour are what the field editor falls back to. They
@@ -165,9 +220,13 @@ private struct JustifiedTextRepresentable: NSViewRepresentable {
 #else
 private struct JustifiedTextRepresentable: UIViewRepresentable {
     let attributed: NSAttributedString
+    var lineLimit: Int? = nil
 
     func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
+        // TextKit 1, the engine `ReaderTextMeasurer.lineEnds` lays text out with: where
+        // a page breaks a paragraph has to be where this view wraps it, to the character.
+        let view = UITextView(usingTextLayoutManager: false)
+        view.textContainer.lineBreakMode = .byWordWrapping
         #if !os(tvOS)
         view.isEditable = false
         #endif
@@ -176,11 +235,15 @@ private struct JustifiedTextRepresentable: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
+        // Italic letters lean past the end of the line; a text view clips them by default,
+        // shaving the last letter off every justified line of an italic translation.
+        view.clipsToBounds = false
         view.setContentCompressionResistancePriority(.required, for: .vertical)
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        view.textContainer.maximumNumberOfLines = lineLimit ?? 0
         if view.attributedText != attributed {
             view.attributedText = attributed
         }

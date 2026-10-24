@@ -73,6 +73,7 @@
 		TVRCV001 /* BookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVRCV000 /* BookReceiver.swift */; };
 		TVLIB001 /* TVLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVLIB000 /* TVLibraryView.swift */; };
 		TVRDR001 /* TVReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVRDR000 /* TVReaderView.swift */; };
+		TVCRL001 /* PageCurl.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVCRL000 /* PageCurl.swift */; };
 		TVSH001002 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH001000 /* Book.swift */; };
 		TVSH030002 /* TranslationMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH030000 /* TranslationMemory.swift */; };
 		TVSH031002 /* BookTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH031000 /* BookTransfer.swift */; };
@@ -136,6 +137,7 @@
 		TVRCV000 /* BookReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookReceiver.swift; sourceTree = "<group>"; };
 		TVLIB000 /* TVLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryView.swift; sourceTree = "<group>"; };
 		TVRDR000 /* TVReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVReaderView.swift; sourceTree = "<group>"; };
+		TVCRL000 /* PageCurl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageCurl.swift; sourceTree = "<group>"; };
 		MAC005000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVINFO00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVPRD000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -323,6 +325,7 @@
 				TVRCV000 /* BookReceiver.swift */,
 				TVLIB000 /* TVLibraryView.swift */,
 				TVRDR000 /* TVReaderView.swift */,
+				TVCRL000 /* PageCurl.swift */,
 				TVINFO00 /* Info.plist */,
 				TVAST000 /* Assets.xcassets */,
 			);
@@ -576,6 +579,7 @@
 				TVRCV001 /* BookReceiver.swift in Sources */,
 				TVLIB001 /* TVLibraryView.swift in Sources */,
 				TVRDR001 /* TVReaderView.swift in Sources */,
+				TVCRL001 /* PageCurl.swift in Sources */,
 				TVSH001002 /* Book.swift in Sources */,
 				TVSH030002 /* TranslationMemory.swift in Sources */,
 				TVSH031002 /* BookTransfer.swift in Sources */,

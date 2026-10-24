@@ -45,7 +45,7 @@ struct ThemeSettings: View {
                 columns: [GridItem(.adaptive(minimum: 72), spacing: 10)],
                 spacing: 12
             ) {
-                ForEach(BookTheme.allCases, id: \.self) { theme in
+                ForEach(BookTheme.macChoices, id: \.self) { theme in
                     themeButton(theme)
                 }
             }

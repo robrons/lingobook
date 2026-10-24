@@ -12,6 +12,9 @@ import SwiftUI
 struct PageView: View {
     /// Text per column. One entry for a single-column page, two for a spread.
     let columns: [[String]]
+    /// Book-set paragraphs — indents, page-spanning splits — in place of `columns`' plain
+    /// strings, when the reader is laying the book out as a book rather than a bilingual text.
+    var paragraphs: [[ReaderParagraph]]? = nil
     var translatedColumns: [[String]]? = nil
     var layoutMode: LayoutMode = .sideBySide
     let isOriginal: Bool
@@ -20,6 +23,7 @@ struct PageView: View {
     let isFirstPage: Bool
     let fontSize: CGFloat
     let theme: BookTheme
+    var style = ReadingStyle()
     let isTranslating: Bool
     let onTranslate: (String) -> Void
     let onCopy: (String) -> Void
@@ -53,7 +57,10 @@ struct PageView: View {
 
     private var pageContent: some View {
         GeometryReader { geometry in
-            columnLayout(width: geometry.size.width)
+            // The style's margins come off both sides before the columns are cut — the
+            // same subtraction the paginator makes, so lines break where they were measured.
+            columnLayout(width: geometry.size.width - style.extraMargin * 2)
+                .frame(maxWidth: .infinity)
         }
             .padding(.top, ReaderLayout.topContentInset)
             .padding(.bottom, ReaderLayout.bottomContentInset)
@@ -82,7 +89,46 @@ struct PageView: View {
         }
     }
 
+    @ViewBuilder
     private func column(at columnIndex: Int) -> some View {
+        if let paragraphs, layoutMode != .interleaved {
+            bookColumn(paragraphs.indices.contains(columnIndex) ? paragraphs[columnIndex] : [], columnIndex: columnIndex)
+        } else {
+            bilingualColumn(at: columnIndex)
+        }
+    }
+
+    /// A column set as a book is: paragraphs indented, with no more space between them
+    /// than between lines — a text view leaves line spacing off a paragraph's last line,
+    /// so it goes back in here and the rhythm runs unbroken down the page.
+    private func bookColumn(_ items: [ReaderParagraph], columnIndex: Int) -> some View {
+        VStack(alignment: .leading, spacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale) {
+            if isFirstPage && columnIndex == 0 && !chapterTitle.isEmpty {
+                Text(isOriginal ? chapterTitle : translatedChapterTitle)
+                    .font(style.titleFont(size: fontSize + ReaderLayout.titleSizeIncrease, weight: .medium))
+                    .foregroundStyle(theme.textColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // The stack's own spacing adds a line gap; the paginator budgets the
+                    // heading's air without it, so take it back out here.
+                    .padding(.bottom, ReaderLayout.titleBottomPadding + ReaderLayout.paragraphSpacing
+                             - ReaderLayout.bodyLineSpacing * style.lineSpacingScale)
+            }
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                JustifiedText(
+                    text: item.text,
+                    fontSize: fontSize,
+                    lineSpacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale,
+                    color: theme.textColor,
+                    style: style,
+                    firstLineIndent: item.indented ? ReaderLayout.firstLineIndent(size: fontSize) : 0,
+                    lineLimit: item.lineLimit
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func bilingualColumn(at columnIndex: Int) -> some View {
         let paragraphs = columns.indices.contains(columnIndex) ? columns[columnIndex] : []
         let translations = translatedColumns?.indices.contains(columnIndex) == true
             ? translatedColumns![columnIndex]
@@ -93,19 +139,28 @@ struct PageView: View {
             // else it would read as a second chapter starting mid-spread.
             if isFirstPage && columnIndex == 0 && !chapterTitle.isEmpty {
                 Text(isOriginal ? chapterTitle : translatedChapterTitle)
-                    .font(.system(size: fontSize + ReaderLayout.titleSizeIncrease, weight: .medium, design: .serif))
+                    .font(style.titleFont(size: fontSize + ReaderLayout.titleSizeIncrease, weight: .medium))
                     .foregroundStyle(theme.textColor)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, ReaderLayout.titleBottomPadding)
             }
 
             ForEach(Array(paragraphs.enumerated()), id: \.offset) { index, text in
+                // A sentence running on into the next column draws its French clipped to
+                // the lines that fit here; the part finishing it may be its English alone.
+                let setting = self.paragraphs?.indices.contains(columnIndex) == true
+                    && self.paragraphs![columnIndex].indices.contains(index)
+                    ? self.paragraphs![columnIndex][index]
+                    : nil
                 VStack(alignment: .leading, spacing: ReaderLayout.interleavedPairSpacing) {
+                    if !text.isEmpty {
                     JustifiedText(
-                        text: text,
+                        text: setting?.text ?? text,
                         fontSize: fontSize,
-                        lineSpacing: ReaderLayout.bodyLineSpacing,
-                        color: theme.textColor
+                        lineSpacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale,
+                        color: theme.textColor,
+                        style: style,
+                        lineLimit: setting?.lineLimit
                     )
                         .fixedSize(horizontal: false, vertical: true)
                         .contextMenu {
@@ -114,6 +169,7 @@ struct PageView: View {
                             }
                             Button("Copy") { onCopy(text) }
                         }
+                    }
 
                     if layoutMode == .interleaved {
                         let translated = translations.indices.contains(index) ? translations[index] : ""
@@ -122,10 +178,12 @@ struct PageView: View {
                                 text: translated,
                                 fontSize: fontSize * ReaderLayout.translationScale,
                                 italic: true,
-                                lineSpacing: ReaderLayout.translationLineSpacing,
-                                color: theme.textColor.opacity(0.6)
+                                lineSpacing: ReaderLayout.translationLineSpacing * style.lineSpacingScale,
+                                color: theme.textColor.opacity(0.6),
+                                style: style
                             )
                                 .fixedSize(horizontal: false, vertical: true)
+                                .padding(.trailing, ReaderLayout.italicOverhang)
                                 .padding(.bottom, ReaderLayout.interleavedTranslationBottomPadding)
                                 .transition(.opacity)
                         }
@@ -135,6 +193,23 @@ struct PageView: View {
             }
 
         }
+    }
+}
+
+/// A paragraph as the book layout sets it.
+struct ReaderParagraph: Equatable {
+    var text: String
+    /// Draw only this many lines of `text` — the part of a paragraph that ends a page.
+    var lineLimit: Int?
+    var indented: Bool
+    var isHeading: Bool
+
+    /// A short line with no closing punctuation — "LETTER VII", "Part Two" — reads as a
+    /// heading: it isn't indented, and neither is the paragraph after it.
+    static func looksLikeHeading(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.last, trimmed.count <= 48 else { return false }
+        return !".,;:!?…»”\"'’)]–—-*".contains(last)
     }
 }
 

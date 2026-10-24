@@ -50,12 +50,11 @@ enum ReaderLayout {
     /// Raised from 1000, where a 1032pt window cleared the bar and then split into two
     /// 380pt columns of about 35 characters — too narrow to read. Books waits for real
     /// width before going to two columns, and at 1200 so does this.
-    #if os(tvOS)
-    // One wide column reads better from across the room than two narrow ones.
-    static let twoColumnMinWidth: CGFloat = .greatestFiniteMagnitude
-    #else
+    ///
+    /// A television is always wide enough. One 1300pt column there ran to ~95 characters
+    /// a line and left the lower half of the screen empty; two facing pages of ~800pt
+    /// each read like an open book, which is what Books does on any wide screen.
     static let twoColumnMinWidth: CGFloat = 1200
-    #endif
 
     /// Room kept for the toolbar and scrubber that float above the page.
     ///
@@ -69,9 +68,11 @@ enum ReaderLayout {
     static let chromeTopInset: CGFloat = 54
     static let chromeBottomInset: CGFloat = 30
     #elseif os(tvOS)
-    // No toolbar above the page; a single status line below it.
-    static let chromeTopInset: CGFloat = 0
-    static let chromeBottomInset: CGFloat = 40
+    // Bands above and below the spread, as Books keeps its toolbar off the text: the
+    // running heads live in them while reading, and the controls take them over when
+    // shown. Nothing that appears ever covers a line.
+    static let chromeTopInset: CGFloat = 80
+    static let chromeBottomInset: CGFloat = 56
     #else
     static let chromeTopInset: CGFloat = 64
     // A 44-point button row plus 14 points below it, kept constant when hidden.
@@ -90,12 +91,25 @@ enum ReaderLayout {
     }
 
     static let paragraphSpacing: CGFloat = 16
+
+    /// A book paragraph's first-line indent, as Books sets it: a little over an em.
+    static func firstLineIndent(size: CGFloat) -> CGFloat { (size * 1.2).rounded() }
+    #if os(tvOS)
+    // A fixed 6pt was ~0.35em at Mac sizes but under 0.2em at television sizes, which
+    // set lines noticeably tighter than Books. Scaled by `ReadingStyle.lineSpacingScale`.
+    static let bodyLineSpacing: CGFloat = 10
+    #else
     static let bodyLineSpacing: CGFloat = 6
+    #endif
 
     static let titleSizeIncrease: CGFloat = 8
     static let titleBottomPadding: CGFloat = 8
 
     static let translationScale: CGFloat = 0.9
+
+    /// Room left at the end of an italic translation's lines: slanted letters lean past
+    /// the line's end, and a text view clips whatever leans out of it.
+    static let italicOverhang: CGFloat = 16
     static let translationLineSpacing: CGFloat = 4
     static let interleavedPairSpacing: CGFloat = 4
     // Trimmed from 8/12: Books sets paragraphs far tighter than this, and every point
@@ -158,16 +172,17 @@ enum ReaderTextMeasurer {
         weight: Font.Weight = .regular,
         lineSpacing: CGFloat,
         width: CGFloat,
-        justified: Bool = true
+        justified: Bool = true,
+        style: ReadingStyle = ReadingStyle()
     ) -> CGFloat {
         guard width > 0, !text.isEmpty else { return 0 }
 
-        let key = "t|\(Int(width))|\(size)|\(weight)|\(lineSpacing)|\(justified)|\(text)"
+        let key = "t|\(Int(width))|\(size)|\(weight)|\(lineSpacing)|\(justified)|\(style.cacheKey)|\(text)"
 
         guard justified else {
             return measure(
                 Text(text)
-                    .font(.system(size: size, weight: weight, design: .serif))
+                    .font(style.titleFont(size: size, weight: weight))
                     .lineSpacing(lineSpacing)
                     .fixedSize(horizontal: false, vertical: true),
                 width: width,
@@ -181,12 +196,80 @@ enum ReaderTextMeasurer {
                 fontSize: size,
                 weight: weight.platformWeight,
                 lineSpacing: lineSpacing,
-                color: .primary
+                color: .primary,
+                style: style
             )
             .fixedSize(horizontal: false, vertical: true),
             width: width,
             cacheKey: key
         )
+    }
+
+    /// Height of a paragraph as the book layout sets it: indent, and line limit if it's
+    /// the part that ends a page.
+    static func height(
+        of paragraph: ReaderParagraph,
+        size: CGFloat,
+        lineSpacing: CGFloat,
+        width: CGFloat,
+        style: ReadingStyle
+    ) -> CGFloat {
+        guard paragraph.indented || paragraph.lineLimit != nil else {
+            return height(of: paragraph.text, size: size, lineSpacing: lineSpacing, width: width, style: style)
+        }
+        guard width > 0, !paragraph.text.isEmpty else { return 0 }
+        let indent = paragraph.indented ? ReaderLayout.firstLineIndent(size: size) : 0
+        let key = "b|\(Int(width))|\(size)|\(lineSpacing)|\(style.cacheKey)|\(indent)|\(paragraph.lineLimit ?? 0)|\(paragraph.text)"
+        return measure(
+            JustifiedText(
+                text: paragraph.text,
+                fontSize: size,
+                lineSpacing: lineSpacing,
+                color: .primary,
+                style: style,
+                firstLineIndent: indent,
+                lineLimit: paragraph.lineLimit
+            )
+            .fixedSize(horizontal: false, vertical: true),
+            width: width,
+            cacheKey: key
+        )
+    }
+
+    /// Where each line of a paragraph ends, as UTF-16 offsets — laid out by the same
+    /// engine, with the same string and width, that `JustifiedText` draws it with.
+    static func lineEnds(
+        of paragraph: ReaderParagraph,
+        size: CGFloat,
+        lineSpacing: CGFloat,
+        width: CGFloat,
+        style: ReadingStyle
+    ) -> [Int] {
+        let attributed = JustifiedTextStyle.attributed(
+            paragraph.text,
+            fontSize: size,
+            weight: .regular,
+            italic: false,
+            lineSpacing: lineSpacing,
+            color: .primary,
+            style: style,
+            firstLineIndent: paragraph.indented ? ReaderLayout.firstLineIndent(size: size) : 0
+        )
+        let storage = NSTextStorage(attributedString: attributed)
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        layout.ensureLayout(for: container)
+
+        // An indent is a lead character the paragraph's own text doesn't have.
+        let lead = paragraph.indented ? (JustifiedTextStyle.indentMark as NSString).length : 0
+        var ends: [Int] = []
+        layout.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layout.numberOfGlyphs)) { _, _, _, glyphs, _ in
+            ends.append(max(0, NSMaxRange(layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)) - lead))
+        }
+        return ends
     }
 
     /// Height of one interleaved unit's *text*: source with its translation beneath,
@@ -202,31 +285,53 @@ enum ReaderTextMeasurer {
     /// rather than clipping.
     static func interleavedPairHeight(
         text: String,
+        translation: String? = nil,
         fontSize: CGFloat,
-        width: CGFloat
+        width: CGFloat,
+        style: ReadingStyle = ReadingStyle()
     ) -> CGFloat {
-        guard width > 0, !text.isEmpty else { return 0 }
+        guard width > 0, !text.isEmpty || !(translation ?? "").isEmpty else { return 0 }
+        if text.isEmpty, let translation {
+            // The English of a sentence whose French ended the previous column.
+            return measure(
+                JustifiedText(
+                    text: translation,
+                    fontSize: fontSize * ReaderLayout.translationScale,
+                    italic: true,
+                    lineSpacing: ReaderLayout.translationLineSpacing * style.lineSpacingScale,
+                    color: .primary,
+                    style: style
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.trailing, ReaderLayout.italicOverhang),
+                width: width,
+                cacheKey: "pt|\(Int(width))|\(fontSize)|\(style.cacheKey)|\(translation)"
+            )
+        }
         return measure(
             VStack(alignment: .leading, spacing: ReaderLayout.interleavedPairSpacing) {
                 JustifiedText(
                     text: text,
                     fontSize: fontSize,
-                    lineSpacing: ReaderLayout.bodyLineSpacing,
-                    color: .primary
+                    lineSpacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale,
+                    color: .primary,
+                    style: style
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
                 JustifiedText(
-                    text: text,
+                    text: translation ?? text,
                     fontSize: fontSize * ReaderLayout.translationScale,
                     italic: true,
-                    lineSpacing: ReaderLayout.translationLineSpacing,
-                    color: .primary
+                    lineSpacing: ReaderLayout.translationLineSpacing * style.lineSpacingScale,
+                    color: .primary,
+                    style: style
                 )
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.trailing, ReaderLayout.italicOverhang)
             },
             width: width,
-            cacheKey: "p|\(Int(width))|\(fontSize)|\(text)"
+            cacheKey: "p|\(Int(width))|\(fontSize)|\(style.cacheKey)|\(text)|\(translation ?? "")"
         )
     }
 }
@@ -313,5 +418,12 @@ enum TextMeasurement {
         )
 
         return ceil(bounds.height)
+    }
+}
+
+extension ReadingStyle {
+    /// The chapter heading's font: the reading font, ragged, a touch heavier.
+    func titleFont(size: CGFloat, weight: Font.Weight) -> Font {
+        Font(font.platformFont(size: size, weight: self.weight(weight.platformWeight), italic: false) as CTFont)
     }
 }

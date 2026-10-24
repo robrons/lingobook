@@ -34,6 +34,17 @@ final class BookPreparer {
         failures[book.id] = nil
         skippedCounts[book.id] = nil
         guard current?.id != book.id, !queue.contains(where: { $0.id == book.id }) else { return }
+
+        // Nothing to translate: an English book reads on the TV as it is. Running it
+        // through the translator would ask for an English→English pair, which fails, and
+        // the book would never leave the Mac.
+        guard book.needsTranslation else {
+            book.appleTVStatus = .waiting
+            try? book.modelContext?.save()
+            AppleTVSender.shared.sendWaitingBooks()
+            return
+        }
+
         book.appleTVStatus = .preparing
         try? book.modelContext?.save()
         queue.append(book)

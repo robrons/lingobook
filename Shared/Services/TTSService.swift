@@ -82,7 +82,11 @@ final class TTSService: NSObject, AVSpeechSynthesizerDelegate {
         }
 
         for i in 0..<maxCount {
-            let wantsOriginal = i < originalParagraphs.count && (ttsLanguage == .both || ttsLanguage == .original)
+            // With no translation to read — an English book, Original mode — the book
+            // itself is read whatever the setting, or "English only" would read nothing
+            // and the auto-reader would race through the book turning silent pages.
+            let wantsOriginal = i < originalParagraphs.count
+                && (ttsLanguage == .both || ttsLanguage == .original || englishParagraphs.isEmpty)
             let wantsEnglish = i < englishParagraphs.count && (ttsLanguage == .both || ttsLanguage == .english)
 
             if wantsOriginal {

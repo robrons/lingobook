@@ -357,7 +357,7 @@ struct ReaderView: View {
 
     @ViewBuilder
     private func pageSpread(geometry: GeometryProxy) -> some View {
-        if viewModel.layoutMode == .interleaved {
+        if viewModel.layoutMode != .sideBySide {
             interleavedSpread(width: geometry.size.width)
         } else {
             horizontalSpread(width: geometry.size.width)

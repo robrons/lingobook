@@ -24,6 +24,8 @@ final class Book {
     var savedFontSize: Double
     var savedThemeName: String
     var savedLayoutMode: String
+    /// Encoded `ReadingStyle` — font, spacing, margins — or nil for the defaults.
+    var savedStyleData: Data?
 
     // MARK: - What the tutor knows about this book
 
@@ -76,17 +78,33 @@ final class Book {
         self.savedFontSize = 17.0
         #endif
         self.savedThemeName = BookTheme.calm.rawValue
-        #if os(macOS)
-        self.savedLayoutMode = LayoutMode.sideBySide.rawValue
-        #else
-        self.savedLayoutMode = LayoutMode.interleaved.rawValue
-        #endif
+        if !Self.needsTranslation(language: language) {
+            self.savedLayoutMode = LayoutMode.original.rawValue
+        } else {
+            #if os(macOS)
+            self.savedLayoutMode = LayoutMode.sideBySide.rawValue
+            #else
+            self.savedLayoutMode = LayoutMode.interleaved.rawValue
+            #endif
+        }
+    }
+
+    /// Whether this book is in a language other than the one translations go into.
+    var needsTranslation: Bool { Self.needsTranslation(language: language) }
+
+    /// Translations are into English, so an English book has nothing to translate.
+    /// An unknown language is assumed foreign — that's what the app is for.
+    static func needsTranslation(language: String?) -> Bool {
+        guard let language else { return true }
+        return Locale.Language(identifier: language).languageCode != .english
     }
     
     /// Returns the cover as a platform-appropriate image
+    ///
+    /// Nil for a blank cover too, so it gets the generated, titled stand-in instead.
     var coverImage: PlatformImage? {
-        guard let data = coverData else { return nil }
-        return PlatformImage.from(data: data)
+        guard let data = coverData, let image = PlatformImage.from(data: data) else { return nil }
+        return image.isNearlyBlank ? nil : image
     }
 
     /// Whether this is the same book as the given metadata, for import dedupe.
@@ -137,4 +155,9 @@ enum AppleTVStatus: String {
 enum LayoutMode: String, CaseIterable {
     case sideBySide = "Side by Side"
     case interleaved = "Interleaved"
+    /// The book as written, no translation: whole paragraphs on a two-page spread, the
+    /// way Books shows it. Nothing is translated, asked for, or flagged as missing.
+    case original = "Original"
+
+    var showsTranslation: Bool { self != .original }
 }
