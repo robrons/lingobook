@@ -190,7 +190,8 @@ final class AskConversation {
                 }
                 // Only a finished exchange joins the history, and only then does the text
                 // it carried count as shown: a failed question is resent whole next time.
-                sent = history + [Claude.Message(role: "assistant", content: reply)]
+                let sources = entries.first(where: { $0.id == answer.id })?.sources ?? []
+                sent = history + [Claude.Message(role: "assistant", content: Self.remembered(reply, sources: sources))]
                 if context.chapterSoFar.count > textSent.count { textSent = context.chapterSoFar }
                 pageSent = context.pageText
                 #if DEBUG
@@ -240,6 +241,18 @@ final class AskConversation {
         }
     }
     #endif
+
+    /// An answer as the conversation keeps it.
+    ///
+    /// Only the answer's text goes back with the next question — not the search behind it,
+    /// whose pages would be resent every turn. Without a trace of the search, the next turn
+    /// found its own dates and names unexplained and apologised for them, as if it had made
+    /// them up. So a searched answer carries a note of where it came from.
+    private static func remembered(_ reply: String, sources: [Claude.Source]) -> String {
+        guard !sources.isEmpty else { return reply }
+        let list = sources.prefix(6).map { "\($0.title) (\($0.site))" }.joined(separator: "; ")
+        return reply + "\n\n[Found by web search: \(list)]"
+    }
 
     func stop() {
         answering?.cancel()
@@ -342,7 +355,9 @@ final class AskConversation {
         Some questions come with a web search. Use it only for the real world outside the \
         book — history, the author, real people's lives beyond the novel — never for what is \
         in the text you were given or for the story itself. When you use what you found, say \
-        each fact once: no opening summary that the sentences after it then repeat.
+        each fact once: no opening summary that the sentences after it then repeat. An \
+        earlier answer of yours that ends in [Found by web search: …] came from a search you \
+        ran; stand by it as you would by the book, and never write that note yourself.
 
         Reply in the language each question says to. Quote the book's words in its own \
         language, and only words that are in the text you were sent — paraphrase anything \
