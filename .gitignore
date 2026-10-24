@@ -30,3 +30,6 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 xcodebuild_log.txt
+
+# The Claude API key, compiled into the Apple TV app. Never commit it.
+tvOS/Secrets.swift

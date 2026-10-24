@@ -50,6 +50,12 @@ struct TVReaderView: View {
     @State private var swipe: (forward: Bool, byHand: Bool, turned: Bool)?
     /// Pictures of pages, kept for the spread on show so a turn starts without a wait.
     @State private var pageImages: [String: CGImage] = [:]
+    /// Ask's conversation about the chapter. Kept while the panel is closed, so a question
+    /// can be picked up again after reading on.
+    @State private var conversation = AskConversation()
+    /// While Ask's answers are being read, a swipe scrolls them, so the top bar is kept
+    /// out of focus's reach.
+    @State private var isReadingAnswers = false
 
     /// What's layered over the page. Each Back press removes one layer.
     private enum Chrome {
@@ -57,11 +63,12 @@ struct TVReaderView: View {
         case controls
         case appearance
         case contents
+        case ask
     }
 
     private enum Focus: Hashable {
         case page
-        case library, contents, appearance
+        case library, contents, appearance, ask
         case panel
     }
 
@@ -107,6 +114,10 @@ struct TVReaderView: View {
                     contentsPanel
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
+                if chrome == .ask {
+                    askPanel
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
         }
         .animation(.easeOut(duration: 0.25), value: chrome)
@@ -120,6 +131,10 @@ struct TVReaderView: View {
             applyAppearance()
             focus = .page
             #if DEBUG
+            if let index = TVDebugLaunch.chapter, viewModel.chapters.indices.contains(index) {
+                viewModel.currentChapterIndex = index
+                await viewModel.loadChapter(at: index, start: .beginning)
+            }
             for _ in 0..<TVDebugLaunch.pageTurns {
                 viewModel.goToNextPage()
                 try? await Task.sleep(for: .milliseconds(250))
@@ -151,7 +166,26 @@ struct TVReaderView: View {
             switch TVDebugLaunch.panel {
             case "aa": showAppearance()
             case "contents": chrome = .contents
+            case "ask": chrome = .ask
             default: break
+            }
+            if let index = TVDebugLaunch.askSuggestion,
+               AskConversation.suggestions.indices.contains(index),
+               let context = viewModel.pageContext(for: book) {
+                chrome = .ask
+                conversation.ask(AskConversation.suggestions[index], about: context)
+            }
+            if !TVDebugLaunch.questions.isEmpty { chrome = .ask }
+            for question in TVDebugLaunch.questions {
+                while conversation.isAnswering { try? await Task.sleep(for: .milliseconds(200)) }
+                guard let context = viewModel.pageContext(for: book) else { break }
+                if question.hasPrefix("#"), let index = Int(question.dropFirst()),
+                   AskConversation.suggestions.indices.contains(index) {
+                    conversation.ask(AskConversation.suggestions[index], about: context)
+                } else {
+                    conversation.ask(question, about: context)
+                }
+                try? await Task.sleep(for: .milliseconds(200))
             }
             #endif
         }
@@ -190,6 +224,7 @@ struct TVReaderView: View {
             }
         }
         .onDisappear {
+            conversation.stop()
             viewModel.ttsService.stop()
             viewModel.saveProgress(book: book, modelContext: modelContext)
             DisplaySleepPreventer.shared.allowSleep()
@@ -553,6 +588,9 @@ struct TVReaderView: View {
         case .contents:
             chrome = .controls
             Task { focus = .contents }
+        case .ask:
+            chrome = .controls
+            Task { focus = .ask }
         case .controls, .hidden:
             chrome = .hidden
             focus = .page
@@ -586,6 +624,9 @@ struct TVReaderView: View {
                 chrome = .contents
             }
             Spacer()
+            chromeButton("Ask", systemImage: "bubble.left.and.text.bubble.right", iconOnly: true, focus: .ask) {
+                chrome = .ask
+            }
             chromeButton("Appearance", systemImage: "textformat.size", iconOnly: true, focus: .appearance) {
                 showAppearance()
             }
@@ -601,7 +642,7 @@ struct TVReaderView: View {
                 .allowsHitTesting(false)
         }
         .focusSection()
-        .disabled(chrome == .hidden)
+        .disabled(chrome == .hidden || isReadingAnswers)
     }
 
     private func chromeButton(
@@ -865,6 +906,21 @@ struct TVReaderView: View {
             }
         }
         .buttonStyle(PanelButtonStyle(theme: theme, alignment: .leading))
+    }
+
+    // MARK: - Ask
+
+    private var askPanel: some View {
+        HStack {
+            Spacer()
+            TVAskPanel(conversation: conversation, theme: theme, isReading: $isReadingAnswers) {
+                viewModel.pageContext(for: book)
+            }
+        }
+        .padding(.horizontal, ReaderLayout.horizontalPadding)
+        // Below the top bar, as Themes & Settings sits.
+        .padding(.top, ReaderLayout.topContentInset)
+        .padding(.bottom, 20)
     }
 
     // MARK: - Contents
@@ -1172,7 +1228,7 @@ private struct ChromeButtonStyle: ButtonStyle {
 }
 
 /// Rows and keys inside the Aa panel.
-private struct PanelButtonStyle: ButtonStyle {
+struct PanelButtonStyle: ButtonStyle {
     let theme: BookTheme
     var alignment: Alignment = .center
     var compact = false

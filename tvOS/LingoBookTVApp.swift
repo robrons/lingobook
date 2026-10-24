@@ -41,7 +41,8 @@ struct TVContentView: View {
 #if DEBUG
 /// Launch arguments that put the app in a known state, so the reader can be inspected in
 /// the simulator without a remote:
-/// `-LBImport /path/book.epub -LBOpen "title fragment" -LBTurns 3 -LBControls YES -LBPanel aa`.
+/// `-LBImport /path/book.epub -LBOpen "title fragment" -LBTurns 3 -LBControls YES -LBPanel aa`
+/// (or `-LBPanel ask`, or `-LBAsk 0` to ask Ask's first ready-made question).
 enum TVDebugLaunch {
     private static var defaults: UserDefaults { .standard }
 
@@ -69,6 +70,19 @@ enum TVDebugLaunch {
     static var theme: String? { defaults.string(forKey: "LBTheme") }
     /// Scrolls the settings panel to its foot.
     static var scrollsPanel: Bool { defaults.bool(forKey: "LBPanelEnd") }
+    /// Opens the book at this chapter (zero-based), before any `-LBTurns`.
+    static var chapter: Int? {
+        defaults.object(forKey: "LBChapter") == nil ? nil : defaults.integer(forKey: "LBChapter")
+    }
+    /// Asks these in turn, each once the last has been answered: `-LBQuestions "#0|Qui est Fantine ?"`.
+    /// `#n` is Ask's ready-made question n. Answers go to Caches/ask-log.jsonl.
+    static var questions: [String] {
+        defaults.string(forKey: "LBQuestions")?.split(separator: "|").map(String.init) ?? []
+    }
+    /// Opens Ask and asks one of its ready-made questions, by index: `-LBAsk 0`.
+    static var askSuggestion: Int? {
+        defaults.object(forKey: "LBAsk") == nil ? nil : defaults.integer(forKey: "LBAsk")
+    }
 
     @MainActor
     static func run(navigationPath: Binding<NavigationPath>, modelContext: ModelContext) {

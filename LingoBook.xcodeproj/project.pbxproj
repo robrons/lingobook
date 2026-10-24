@@ -92,6 +92,10 @@
 		TVSH032002 /* DisplaySleepPreventer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH032000 /* DisplaySleepPreventer.swift */; };
 		TVZIP001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = TVZIP000 /* ZIPFoundation */; };
 		TVAST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = TVAST000 /* Assets.xcassets */; };
+		TVSEC001 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVSEC000 /* Secrets.swift */; };
+		TVSH040002 /* Claude.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH040000 /* Claude.swift */; };
+		TVSH041002 /* AskConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH041000 /* AskConversation.swift */; };
+		TVASK001 /* TVAskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVASK000 /* TVAskPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -138,6 +142,10 @@
 		TVLIB000 /* TVLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryView.swift; sourceTree = "<group>"; };
 		TVRDR000 /* TVReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVReaderView.swift; sourceTree = "<group>"; };
 		TVCRL000 /* PageCurl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageCurl.swift; sourceTree = "<group>"; };
+		TVSEC000 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		TVASK000 /* TVAskPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAskPanel.swift; sourceTree = "<group>"; };
+		SH040000 /* Claude.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Claude.swift; sourceTree = "<group>"; };
+		SH041000 /* AskConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskConversation.swift; sourceTree = "<group>"; };
 		MAC005000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVINFO00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVPRD000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -225,6 +233,7 @@
 			children = (
 				SH002000 /* EPUBService.swift */,
 				SH031000 /* BookTransfer.swift */,
+				SH040000 /* Claude.swift */,
 				SH021000 /* XHTMLTextParser.swift */,
 				SH003000 /* TranslationService.swift */,
 				SH004004 /* TTSService.swift */,
@@ -251,6 +260,7 @@
 			isa = PBXGroup;
 			children = (
 				SH007000 /* ReaderViewModel.swift */,
+				SH041000 /* AskConversation.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -326,6 +336,8 @@
 				TVLIB000 /* TVLibraryView.swift */,
 				TVRDR000 /* TVReaderView.swift */,
 				TVCRL000 /* PageCurl.swift */,
+				TVASK000 /* TVAskPanel.swift */,
+				TVSEC000 /* Secrets.swift */,
 				TVINFO00 /* Info.plist */,
 				TVAST000 /* Assets.xcassets */,
 			);
@@ -580,6 +592,10 @@
 				TVLIB001 /* TVLibraryView.swift in Sources */,
 				TVRDR001 /* TVReaderView.swift in Sources */,
 				TVCRL001 /* PageCurl.swift in Sources */,
+				TVASK001 /* TVAskPanel.swift in Sources */,
+				TVSEC001 /* Secrets.swift in Sources */,
+				TVSH040002 /* Claude.swift in Sources */,
+				TVSH041002 /* AskConversation.swift in Sources */,
 				TVSH001002 /* Book.swift in Sources */,
 				TVSH030002 /* TranslationMemory.swift in Sources */,
 				TVSH031002 /* BookTransfer.swift in Sources */,
