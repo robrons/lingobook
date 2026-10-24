@@ -1,6 +1,11 @@
 import SwiftUI
 import MetalKit
 import QuartzCore
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 /// A page turned by hand, the way iBooks turned them on iPad.
 ///
@@ -9,9 +14,10 @@ import QuartzCore
 /// the front of the page on one side, the next page printed on its back. Where it has
 /// lifted, the page beneath is shaded, darkest close in under the roll.
 ///
-/// It follows the thumb on the Siri Remote: `drag(to:)` while the thumb is down, then
-/// `release` lets it fall over or settle back depending on how far and how fast it went.
-/// Edge clicks use `play`, the same curl run by itself.
+/// It follows the hand — a thumb on the Siri Remote, two fingers on a Mac's trackpad, a
+/// finger on an iPad: `drag(to:)` while it's down, then `release` lets the page fall
+/// over or settle back depending on how far and how fast it went. Clicks, taps and the
+/// arrow keys use `play`, the same curl run by itself.
 @MainActor
 @Observable
 final class PageCurl {
@@ -114,6 +120,8 @@ final class PageCurl {
         progress = 0
         target = 0
         velocity = 0
+        // A view kept in place between turns clears itself, ready for the next.
+        redraw()
     }
 
     // MARK: - Motion
@@ -135,6 +143,7 @@ final class PageCurl {
             startSlope = 0
             endSlope = 0
         }
+        target = destination
         flight = Flight(
             from: progress, to: destination, start: CACurrentMediaTime(), duration: duration,
             startSlope: startSlope, endSlope: endSlope, landed: landed
@@ -145,7 +154,14 @@ final class PageCurl {
     private func startTicking() {
         guard link == nil else { return }
         lastTick = CACurrentMediaTime()
-        let link = CADisplayLink(target: DisplayLinkTarget { [weak self] in self?.tick() }, selector: #selector(DisplayLinkTarget.fire))
+        let target = DisplayLinkTarget { [weak self] in self?.tick() }
+        #if os(macOS)
+        // A Mac's display link comes from the screen it's paced to.
+        guard let link = (NSApp.keyWindow?.screen ?? NSScreen.main)?
+            .displayLink(target: target, selector: #selector(DisplayLinkTarget.fire)) else { return }
+        #else
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.fire))
+        #endif
         link.add(to: .main, forMode: .common)
         self.link = link
     }
@@ -162,8 +178,15 @@ final class PageCurl {
             // And never a step backward on the way, whatever the curve says.
             progress = flight.to >= flight.from ? max(progress, next) : min(progress, next)
             if t >= 1 {
+                // Landed: it stays exactly there. Left ticking, the page went back to
+                // following where the hand last was — and a turned page swung back a
+                // fifth of the way in the moment before the curl came down.
                 progress = flight.to
+                target = flight.to
+                velocity = 0
                 self.flight = nil
+                link?.invalidate()
+                link = nil
                 redraw()
                 flight.landed()
                 return
@@ -197,6 +220,33 @@ private final class DisplayLinkTarget: NSObject {
 // MARK: - View
 
 /// Draws a `PageCurl` over the book, the same size as the open spread.
+#if os(macOS)
+struct PageCurlView: NSViewRepresentable {
+    let curl: PageCurl
+    let paper: Color
+
+    func makeCoordinator() -> CurlRenderer { CurlRenderer() }
+
+    func makeNSView(context: Context) -> MTKView {
+        let view = MTKView(frame: .zero, device: context.coordinator.device)
+        view.colorPixelFormat = .bgra8Unorm
+        view.depthStencilPixelFormat = .depth32Float
+        view.isPaused = true
+        view.enableSetNeedsDisplay = true
+        view.layer?.isOpaque = false
+        view.delegate = context.coordinator
+        context.coordinator.curl = curl
+        curl.redraw = { [weak view] in view?.needsDisplay = true }
+        return view
+    }
+
+    func updateNSView(_ view: MTKView, context: Context) {
+        context.coordinator.curl = curl
+        context.coordinator.paper = paper
+        view.needsDisplay = true
+    }
+}
+#else
 struct PageCurlView: UIViewRepresentable {
     let curl: PageCurl
     let paper: Color
@@ -223,6 +273,7 @@ struct PageCurlView: UIViewRepresentable {
         view.setNeedsDisplay()
     }
 }
+#endif
 
 // MARK: - Renderer
 
@@ -230,18 +281,17 @@ struct PageCurlView: UIViewRepresentable {
 /// around a cylinder in the vertex shader.
 @MainActor
 final class CurlRenderer: NSObject, MTKViewDelegate {
-    let device = MTLCreateSystemDefaultDevice()
     weak var curl: PageCurl?
     var paper: Color = .white
 
-    private var queue: MTLCommandQueue?
-    private var sheetPipeline: MTLRenderPipelineState?
-    private var flatPipeline: MTLRenderPipelineState?
-    private var depth: MTLDepthStencilState?
-    private var grid: MTLBuffer?
-    private var indices: MTLBuffer?
-    private var indexCount = 0
-    private var textures: [ObjectIdentifier: MTLTexture] = [:]
+    var device: MTLDevice? { Self.resources?.device }
+    private var queue: MTLCommandQueue? { Self.resources?.queue }
+    private var sheetPipeline: MTLRenderPipelineState? { Self.resources?.sheetPipeline }
+    private var flatPipeline: MTLRenderPipelineState? { Self.resources?.flatPipeline }
+    private var depth: MTLDepthStencilState? { Self.resources?.depth }
+    private var grid: MTLBuffer? { Self.resources?.grid }
+    private var indices: MTLBuffer? { Self.resources?.indices }
+    private var indexCount: Int { Self.resources?.indexCount ?? 0 }
     private var loadedPages: (left: CGImage, right: CGImage, front: CGImage, back: CGImage)?
     private var loaded: [MTLTexture] = []
 
@@ -249,13 +299,27 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
     private static let columns = 64
     private static let rows = 48
 
-    override init() {
-        super.init()
-        guard let device else { return }
-        queue = device.makeCommandQueue()
+    /// The GPU's side of the curl — shaders, pipelines, the mesh — built once for the
+    /// app, not once per turn. Compiling the shaders takes a moment on the main thread,
+    /// and paid at the start of every turn it held the page still under the fingers,
+    /// then let it leap to catch up with them.
+    private struct Resources {
+        let device: MTLDevice
+        let queue: MTLCommandQueue?
+        let sheetPipeline: MTLRenderPipelineState?
+        let flatPipeline: MTLRenderPipelineState?
+        let depth: MTLDepthStencilState?
+        let grid: MTLBuffer?
+        let indices: MTLBuffer?
+        let indexCount: Int
+    }
 
+    private static let resources: Resources? = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        var sheetPipeline: MTLRenderPipelineState?
+        var flatPipeline: MTLRenderPipelineState?
         do {
-            let library = try device.makeLibrary(source: Self.shaders, options: nil)
+            let library = try device.makeLibrary(source: CurlRenderer.shaders, options: nil)
             let sheet = MTLRenderPipelineDescriptor()
             sheet.vertexFunction = library.makeFunction(name: "sheetVertex")
             sheet.fragmentFunction = library.makeFunction(name: "sheetFragment")
@@ -276,26 +340,35 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
         let depthDescriptor = MTLDepthStencilDescriptor()
         depthDescriptor.depthCompareFunction = .less
         depthDescriptor.isDepthWriteEnabled = true
-        depth = device.makeDepthStencilState(descriptor: depthDescriptor)
 
         var vertices: [SIMD2<Float>] = []
-        for row in 0...Self.rows {
-            for column in 0...Self.columns {
-                vertices.append(SIMD2(Float(column) / Float(Self.columns), Float(row) / Float(Self.rows)))
+        for row in 0...CurlRenderer.rows {
+            for column in 0...CurlRenderer.columns {
+                vertices.append(SIMD2(Float(column) / Float(CurlRenderer.columns), Float(row) / Float(CurlRenderer.rows)))
             }
         }
         var triangles: [UInt32] = []
-        let stride = UInt32(Self.columns + 1)
-        for row in 0..<UInt32(Self.rows) {
-            for column in 0..<UInt32(Self.columns) {
+        let stride = UInt32(CurlRenderer.columns + 1)
+        for row in 0..<UInt32(CurlRenderer.rows) {
+            for column in 0..<UInt32(CurlRenderer.columns) {
                 let a = row * stride + column, b = a + 1, c = a + stride, d = c + 1
                 triangles += [a, c, b, b, c, d]
             }
         }
-        grid = device.makeBuffer(bytes: vertices, length: vertices.count * MemoryLayout<SIMD2<Float>>.stride)
-        indices = device.makeBuffer(bytes: triangles, length: triangles.count * MemoryLayout<UInt32>.stride)
-        indexCount = triangles.count
-    }
+        return Resources(
+            device: device,
+            queue: device.makeCommandQueue(),
+            sheetPipeline: sheetPipeline,
+            flatPipeline: flatPipeline,
+            depth: device.makeDepthStencilState(descriptor: depthDescriptor),
+            grid: device.makeBuffer(bytes: vertices, length: vertices.count * MemoryLayout<SIMD2<Float>>.stride),
+            indices: device.makeBuffer(bytes: triangles, length: triangles.count * MemoryLayout<UInt32>.stride),
+            indexCount: triangles.count
+        )
+    }()
+
+    /// Builds the GPU side ahead of the first turn, so even that one starts at once.
+    static func warmUp() { _ = resources }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
@@ -309,7 +382,13 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        guard let curl, curl.isActive, let pages = curl.pages,
+        // Between turns the view stays in place, showing nothing: clear it, so the next
+        // turn never opens on a frame left over from the last.
+        guard let curl, curl.isActive else {
+            clear(view)
+            return
+        }
+        guard let pages = curl.pages,
               let queue, let sheetPipeline, let flatPipeline,
               let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable,
               let buffer = queue.makeCommandBuffer() else { return }
@@ -320,7 +399,7 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
         }
         guard loaded.count == 4 else { return }
 
-        let paperColor = SIMD4<Float>(UIColor(paper).rgba)
+        let paperColor = Self.rgba(paper)
         pass.colorAttachments[0].clearColor = MTLClearColor(
             red: Double(paperColor.x), green: Double(paperColor.y), blue: Double(paperColor.z), alpha: 1
         )
@@ -372,6 +451,16 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
         }
 
         encoder.endEncoding()
+        buffer.present(drawable)
+        buffer.commit()
+    }
+
+    private func clear(_ view: MTKView) {
+        guard let queue, let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable,
+              let buffer = queue.makeCommandBuffer() else { return }
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].loadAction = .clear
+        buffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
         buffer.present(drawable)
         buffer.commit()
     }
@@ -559,10 +648,15 @@ final class CurlRenderer: NSObject, MTKViewDelegate {
     """
 }
 
-private extension UIColor {
-    var rgba: SIMD4<Float> {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
+extension CurlRenderer {
+    fileprivate static func rgba(_ color: Color) -> SIMD4<Float> {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
+        #if os(macOS)
+        let srgb = NSColor(color).usingColorSpace(.sRGB) ?? .white
+        srgb.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #else
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #endif
         return SIMD4(Float(r), Float(g), Float(b), Float(a))
     }
 }
@@ -571,10 +665,31 @@ private extension UIColor {
 
 /// Pictures of pages for a turn, drawn the way the screen draws them.
 ///
-/// Pages are SwiftUI wrapping UIKit text views, which SwiftUI's own image renderer can't
-/// draw — so each is hosted for a moment, out of sight behind the app, and photographed.
+/// Pages are SwiftUI wrapping platform text views, which SwiftUI's own image renderer
+/// can't draw — so each is hosted for a moment and photographed.
 @MainActor
 enum PageSnapshotter {
+    #if os(macOS)
+    static func image(of content: some View, size: CGSize, background: Color) -> CGImage? {
+        guard size.width > 0, size.height > 0 else { return nil }
+        let host = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(background))
+        host.frame = CGRect(origin: .zero, size: size)
+        // In the reader's own appearance, so system colours match what's on screen.
+        host.appearance = NSApp.keyWindow?.effectiveAppearance
+        host.layoutSubtreeIfNeeded()
+        // At the screen's own scale, so text in the curl is as sharp as on the page.
+        let scale = NSApp.keyWindow?.backingScaleFactor ?? 2
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        rep.size = size
+        host.cacheDisplay(in: host.bounds, to: rep)
+        return rep.cgImage
+    }
+    #else
     static func image(of content: some View, size: CGSize, background: Color) -> CGImage? {
         guard size.width > 0, size.height > 0,
               let window = UIApplication.shared.connectedScenes
@@ -603,5 +718,12 @@ enum PageSnapshotter {
             host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
         }
         return image.cgImage
+    }
+    #endif
+
+    /// One half of a picture of the whole page area — a page of the spread the curl turns.
+    static func half(_ image: CGImage, right: Bool) -> CGImage? {
+        let width = image.width / 2
+        return image.cropping(to: CGRect(x: right ? image.width - width : 0, y: 0, width: width, height: image.height))
     }
 }

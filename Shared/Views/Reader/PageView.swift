@@ -124,6 +124,14 @@ struct PageView: View {
                     lineLimit: item.lineLimit
                 )
                 .fixedSize(horizontal: false, vertical: true)
+                #if !os(tvOS)
+                .contextMenu {
+                    if isOriginal {
+                        Button("Translate") { onTranslate(item.text) }
+                    }
+                    Button("Copy") { onCopy(item.text) }
+                }
+                #endif
             }
         }
     }
@@ -179,7 +187,7 @@ struct PageView: View {
                                 fontSize: fontSize * ReaderLayout.translationScale,
                                 italic: true,
                                 lineSpacing: ReaderLayout.translationLineSpacing * style.lineSpacingScale,
-                                color: theme.textColor.opacity(0.6),
+                                color: theme.translationColor,
                                 style: style
                             )
                                 .fixedSize(horizontal: false, vertical: true)

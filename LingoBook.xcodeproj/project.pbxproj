@@ -96,6 +96,16 @@
 		TVSH040002 /* Claude.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH040000 /* Claude.swift */; };
 		TVSH041002 /* AskConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH041000 /* AskConversation.swift */; };
 		TVASK001 /* TVAskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVASK000 /* TVAskPanel.swift */; };
+		MACSEC001 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVSEC000 /* Secrets.swift */; };
+		IPSEC001 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVSEC000 /* Secrets.swift */; };
+		SH040001 /* Claude.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH040000 /* Claude.swift */; };
+		IPSH040001 /* Claude.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH040000 /* Claude.swift */; };
+		SH041001 /* AskConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH041000 /* AskConversation.swift */; };
+		IPSH041001 /* AskConversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH041000 /* AskConversation.swift */; };
+		MACCRL001 /* PageCurl.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVCRL000 /* PageCurl.swift */; };
+		IPCRL001 /* PageCurl.swift in Sources */ = {isa = PBXBuildFile; fileRef = TVCRL000 /* PageCurl.swift */; };
+		SH042001 /* AskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH042000 /* AskPanel.swift */; };
+		IPSH042001 /* AskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SH042000 /* AskPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -146,6 +156,7 @@
 		TVASK000 /* TVAskPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAskPanel.swift; sourceTree = "<group>"; };
 		SH040000 /* Claude.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Claude.swift; sourceTree = "<group>"; };
 		SH041000 /* AskConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskConversation.swift; sourceTree = "<group>"; };
+		SH042000 /* AskPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPanel.swift; sourceTree = "<group>"; };
 		MAC005000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVINFO00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		TVPRD000 /* LingoBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -215,6 +226,7 @@
 				GRP001003 /* Utilities */,
 				GRP001004 /* ViewModels */,
 				GRP001005 /* Views */,
+				TVSEC000 /* Secrets.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -295,6 +307,8 @@
 				SH015000 /* ThemeSettings.swift */,
 				SH016000 /* ReaderView.swift */,
 				SH017000 /* TOCSheet.swift */,
+				SH042000 /* AskPanel.swift */,
+				TVCRL000 /* PageCurl.swift */,
 			);
 			path = Reader;
 			sourceTree = "<group>";
@@ -335,9 +349,7 @@
 				TVRCV000 /* BookReceiver.swift */,
 				TVLIB000 /* TVLibraryView.swift */,
 				TVRDR000 /* TVReaderView.swift */,
-				TVCRL000 /* PageCurl.swift */,
 				TVASK000 /* TVAskPanel.swift */,
-				TVSEC000 /* Secrets.swift */,
 				TVINFO00 /* Info.plist */,
 				TVAST000 /* Assets.xcassets */,
 			);
@@ -534,6 +546,11 @@
 				SH015001 /* ThemeSettings.swift in Sources */,
 				SH016001 /* ReaderView.swift in Sources */,
 				SH017001 /* TOCSheet.swift in Sources */,
+				MACSEC001 /* Secrets.swift in Sources */,
+				SH040001 /* Claude.swift in Sources */,
+				SH041001 /* AskConversation.swift in Sources */,
+				SH042001 /* AskPanel.swift in Sources */,
+				MACCRL001 /* PageCurl.swift in Sources */,
 				SH030001 /* TranslationMemory.swift in Sources */,
 				SH031001 /* BookTransfer.swift in Sources */,
 				SH032001 /* DisplaySleepPreventer.swift in Sources */,
@@ -578,6 +595,11 @@
 				IPSH015001 /* ThemeSettings.swift in Sources */,
 				IPSH016001 /* ReaderView.swift in Sources */,
 				IPSH017001 /* TOCSheet.swift in Sources */,
+				IPSEC001 /* Secrets.swift in Sources */,
+				IPSH040001 /* Claude.swift in Sources */,
+				IPSH041001 /* AskConversation.swift in Sources */,
+				IPSH042001 /* AskPanel.swift in Sources */,
+				IPCRL001 /* PageCurl.swift in Sources */,
 				IPSH030001 /* TranslationMemory.swift in Sources */,
 				IPSH032001 /* DisplaySleepPreventer.swift in Sources */,
             );

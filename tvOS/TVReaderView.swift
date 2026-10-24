@@ -92,13 +92,13 @@ struct TVReaderView: View {
                 .foregroundStyle(theme.textColor)
             } else {
                 page
-                if curl.isActive {
-                    // Full screen, not the text area: the page being turned is the whole
-                    // page, out to the edges of the television.
-                    PageCurlView(curl: curl, paper: theme.pageColor)
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                }
+                // Full screen, not the text area: the page being turned is the whole
+                // page, out to the edges of the television. Kept in place between turns,
+                // so a swipe lifts the page the instant the thumb moves.
+                PageCurlView(curl: curl, paper: theme.pageColor)
+                    .ignoresSafeArea()
+                    .opacity(curl.isActive ? 1 : 0)
+                    .allowsHitTesting(false)
                 runningHeads
                     // While a page is in the air its footer is part of the page, turning with it.
                     .opacity(chrome == .hidden && !curl.isActive ? 1 : 0)
@@ -1342,50 +1342,5 @@ private struct TVContentsList: View {
                 }
             }
         }
-    }
-}
-
-/// Whether pages are light, dark, or follow the Apple TV's appearance setting.
-enum ReaderAppearance: String, CaseIterable {
-    case light, dark, automatic
-
-    static let key = "readerAppearance"
-
-    static var current: ReaderAppearance {
-        UserDefaults.standard.string(forKey: key).flatMap(ReaderAppearance.init) ?? .automatic
-    }
-
-    var name: String {
-        switch self {
-        case .light: return "Light"
-        case .dark: return "Dark"
-        case .automatic: return "Automatic"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .light: return "sun.max.fill"
-        case .dark: return "moon.fill"
-        case .automatic: return "circle.lefthalf.filled"
-        }
-    }
-
-    /// The light or dark version of a theme this setting asks for.
-    @MainActor func theme(_ theme: BookTheme) -> BookTheme {
-        switch self {
-        case .light: return theme.appearance(dark: false)
-        case .dark: return theme.appearance(dark: true)
-        case .automatic: return theme.appearance(dark: Self.systemIsDark)
-        }
-    }
-
-    /// The Apple TV's own appearance. Read from the screen, not the view: the reader sets
-    /// its window's appearance to match the page, so the view only ever sees its own.
-    @MainActor static var systemIsDark: Bool {
-        let screen = UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.screen }
-            .first
-        return screen?.traitCollection.userInterfaceStyle == .dark
     }
 }

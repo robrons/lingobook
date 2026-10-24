@@ -254,6 +254,19 @@ final class AskConversation {
         return reply + "\n\n[Found by web search: \(list)]"
     }
 
+    /// Claude's italics and bold, kept; anything block-level shows as written.
+    ///
+    /// Asked for Markdown, Haiku sometimes italicises a quotation with `<i>` instead, which
+    /// the panel would print as it stands. Those few tags become Markdown first.
+    nonisolated static func styled(_ text: String) -> AttributedString {
+        var text = text
+        for (tags, mark) in [(["<i>", "</i>", "<em>", "</em>"], "*"), (["<b>", "</b>", "<strong>", "</strong>"], "**")] {
+            for tag in tags { text = text.replacingOccurrences(of: tag, with: mark) }
+        }
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    }
+
     func stop() {
         answering?.cancel()
         answering = nil
@@ -328,13 +341,23 @@ final class AskConversation {
     ///
     /// Not a tutor persona: given a teaching role, a model turns every question into a
     /// lesson nobody asked for. The length limit is a number, because "keep it short"
-    /// produces essays, and the answer is read from across a room.
+    /// produces essays, and the answer is read from across a room or in a narrow panel.
     static func systemPrompt(for context: PageContext) -> String {
         let remaining = context.chapterCount - context.chapterIndex - 1
+        #if os(tvOS)
+        let device = "television"
+        let readingDistance = "from across the room"
+        #elseif os(macOS)
+        let device = "Mac"
+        let readingDistance = "in a panel beside the page"
+        #else
+        let device = "iPad"
+        let readingDistance = "in a panel beside the page"
+        #endif
 
         return """
         You are helping someone read “\(context.bookTitle)” by \(context.bookAuthor) on their \
-        television. They are reading “\(context.chapterTitle)”, and you are given the text of \
+        \(device). They are reading “\(context.chapterTitle)”, and you are given the text of \
         this chapter up to the page on their screen. A page can start or end mid-sentence; \
         that is only where the page breaks, so don't mention it.
 
@@ -364,7 +387,7 @@ final class AskConversation {
         you remember rather than put it in quotation marks.
 
         At most two short paragraphs, about 120 words — a recap of the whole book so far can \
-        run to about 250: they are reading this from across the room and want to get back to \
+        run to about 250: they are reading this \(readingDistance) and want to get back to \
         the book. Plain prose — no headings, lists or tables. *Italics* for quoted words and \
         titles are fine.
         """

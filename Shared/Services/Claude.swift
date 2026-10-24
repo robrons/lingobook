@@ -5,12 +5,12 @@ import Foundation
 /// Plain `URLSession` rather than an SDK: there is no official Swift one, and the whole
 /// surface used here is one streamed POST. Haiku because the questions asked about a page
 /// are answered from the text sent with them, not from what the model remembers — the
-/// small model's weak spot — and because on a television the first words need to arrive
-/// in about a second.
+/// small model's weak spot — and because, on a television above all, the first words need
+/// to arrive in about a second.
 ///
-/// The key is compiled in, from `tvOS/Secrets.swift` — git-ignored, so it stays off
-/// GitHub. Fine for an app that only ever runs on your own Apple TV; anyone holding the
-/// binary could dig it out, so this app is never one to hand to anyone else.
+/// The key is compiled in, from `Shared/Secrets.swift` — git-ignored, so it stays off
+/// GitHub. Fine for an app that only ever runs on your own Mac, iPad and Apple TV; anyone
+/// holding the binary could dig it out, so this app is never one to hand to anyone else.
 enum Claude {
     static let model = "claude-haiku-5-5"
     static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
@@ -50,7 +50,7 @@ enum Claude {
         var errorDescription: String? {
             switch self {
             case .rejectedKey:
-                return "Claude didn't accept the API key built into this app. Check tvOS/Secrets.swift and rebuild."
+                return "Claude didn't accept the API key built into this app. Check Shared/Secrets.swift and rebuild."
             case .busy:
                 return "Claude is busy right now. Try again in a moment."
             case .declined:

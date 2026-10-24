@@ -1,104 +1,72 @@
 import SwiftUI
 
-/// Table of Contents sheet (Apple Books style)
+/// Contents, as Apple TV lays it out: a panel down the left of the page, the book's cover
+/// and title at its head, opened on the chapter you're reading.
 struct TOCSheet: View {
-    let tableOfContents: [EPUBService.TOCItem]
-    let chapters: [EPUBService.Chapter]
-    let currentChapterIndex: Int
+    let book: Book
+    let titles: [String]
+    let currentIndex: Int
+    let theme: BookTheme
     let onSelect: (Int) -> Void
-    let onDismiss: () -> Void
-    
-    // Apple Books warm cream background
-    private let warmBackground = Color(red: 0.976, green: 0.957, blue: 0.922)
-    private let selectionColor = Color(red: 0.92, green: 0.89, blue: 0.84)
-    private let textColor = Color(red: 0.2, green: 0.18, blue: 0.15)
-    
-    private func chapterIndex(for tocItem: EPUBService.TOCItem) -> Int? {
-        chapters.firstIndex { ch in
-            ch.href.contains(tocItem.href) || tocItem.href.contains(ch.href)
-        }
-    }
-    
+
+    static let width: CGFloat = 340
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(textColor.opacity(0.5))
-                        .frame(width: 28, height: 28)
-                        .background(textColor.opacity(0.08))
-                        .clipShape(Circle())
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                BookCover(book: book)
+                    .aspectRatio(2/3, contentMode: .fill)
+                    .frame(width: 44, height: 66)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(book.title)
+                        .font(.system(size: 16, weight: .bold))
+                        .lineLimit(2)
+                    Text(book.author)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text("Contents")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(textColor.opacity(0.6))
-                
-                Spacer()
-                
-                Color.clear.frame(width: 28, height: 28)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            
-            Rectangle()
-                .fill(textColor.opacity(0.1))
-                .frame(height: 0.5)
-            
-            // TOC List
+            .padding([.top, .horizontal], 22)
+
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(tableOfContents, id: \.id) { tocItem in
-                            let idx = chapterIndex(for: tocItem)
-                            let isSelected = idx == currentChapterIndex
-                            let isPartHeader = tocItem.level == 0 && tocItem.label.lowercased().contains("part")
-                            
+                    LazyVStack(spacing: 6) {
+                        ForEach(titles.indices, id: \.self) { index in
                             Button {
-                                if let idx = idx {
-                                    onSelect(idx)
-                                }
+                                onSelect(index)
                             } label: {
-                                Text(tocItem.label)
-                                    .font(.system(
-                                        size: 14,
-                                        weight: isPartHeader ? .semibold : (isSelected ? .medium : .regular)
-                                    ))
-                                    .foregroundStyle(textColor)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, CGFloat(tocItem.level) * 16 + 16)
-                                    .padding(.trailing, 16)
-                                    .padding(.vertical, 10)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? selectionColor : Color.clear)
-                                            .padding(.horizontal, 8)
-                                    )
-                                    .contentShape(Rectangle())
+                                HStack(spacing: 12) {
+                                    Text(titles[index])
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Spacer()
+                                    if index == currentIndex {
+                                        Text("Reading")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 4)
                             }
-                            .buttonStyle(.plain)
-                            .id(tocItem.id)
+                            .buttonStyle(PanelRowButtonStyle(alignment: .leading, isSelected: index == currentIndex))
+                            .id(index)
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 22)
                 }
+                .scrollIndicators(.never)
                 .onAppear {
-                    if let currentItem = tableOfContents.first(where: { chapterIndex(for: $0) == currentChapterIndex }) {
-                        proxy.scrollTo(currentItem.id, anchor: .center)
-                    }
+                    proxy.scrollTo(currentIndex, anchor: .center)
                 }
             }
         }
-        .background(warmBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .frame(minWidth: 320, idealWidth: 350, minHeight: 500, idealHeight: 600)
+        .frame(width: Self.width)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+        .environment(\.colorScheme, theme.isDark ? .dark : .light)
     }
 }

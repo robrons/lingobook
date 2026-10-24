@@ -268,7 +268,7 @@ private struct EntryView: View {
             status(entry.isSearching ? "Searching the web…" : "Reading the page…")
         case .claude:
             VStack(alignment: .leading, spacing: 16) {
-                Text(Self.styled(entry.text))
+                Text(AskConversation.styled(entry.text))
                     .font(.system(size: 28))
                     .lineSpacing(6)
                     .fixedSize(horizontal: false, vertical: true)
@@ -310,19 +310,6 @@ private struct EntryView: View {
             }
         }
         .foregroundStyle(.secondary)
-    }
-
-    /// Claude's italics and bold, kept; anything block-level shows as written.
-    ///
-    /// Asked for Markdown, Haiku sometimes italicises a quotation with `<i>` instead, which
-    /// a television would print as it stands. Those few tags become Markdown first.
-    private static func styled(_ text: String) -> AttributedString {
-        var text = text
-        for (tags, mark) in [(["<i>", "</i>", "<em>", "</em>"], "*"), (["<b>", "</b>", "<strong>", "</strong>"], "**")] {
-            for tag in tags { text = text.replacingOccurrences(of: tag, with: mark) }
-        }
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 }
 

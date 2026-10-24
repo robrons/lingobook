@@ -1,111 +1,118 @@
 import SwiftUI
 
-/// Top toolbar for the reader view
+/// The reader's top bar, as Apple TV lays it out: Library and Contents on the left, the
+/// title centred over the page, Ask and Aa on the right — quiet capsules in the theme's
+/// ink that fill in under the pointer, the way the TV's fill in under focus. The Mac
+/// keeps read-aloud and voice commands beside Ask, since it has no Play/Pause button.
 struct ReaderToolbar: View {
     let bookTitle: String
     let theme: BookTheme
     let onBack: () -> Void
-    let onShowTOC: () -> Void
+    let isContentsOpen: Bool
+    let onToggleContents: () -> Void
     let isReading: Bool
     let onToggleRead: () -> Void
     let isListening: Bool
     let onToggleListening: () -> Void
-    @Binding var showThemeSettings: Bool
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            // Left side: Back + TOC
-            HStack(spacing: 16) {
-                // No pill: Books gives the back affordance no more weight than the text
-                // it sits above.
-                Button(action: onBack) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Library")
-                            .font(.system(size: 15, weight: .regular))
-                    }
-                    .padding(.vertical, 6)
-                    .readerTouchTarget()
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.textColor.opacity(0.8))
-                
-                Button(action: onShowTOC) {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 14))
-                        .readerTouchTarget()
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.textColor.opacity(0.7))
-                .accessibilityLabel("Table of contents")
-            }
-            
-            Spacer()
-            
-            // Center: Book title
-            Text(bookTitle)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(theme.textColor.opacity(0.8))
-                .lineLimit(1)
-            
-            Spacer()
-            
-            // Right side: Mic + Audio + AA
-            HStack(spacing: 16) {
-                Button(action: onToggleListening) {
-                    Image(systemName: isListening ? "mic.fill" : "mic")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isListening ? .red : theme.textColor.opacity(0.7))
-                        .readerTouchTarget()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isListening ? "Stop voice commands" : "Voice commands")
-                
-                Button(action: onToggleRead) {
-                    Image(systemName: isReading ? "stop.circle.fill" : "speaker.wave.2")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isReading ? .red : theme.textColor.opacity(0.7))
-                        .readerTouchTarget()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isReading ? "Stop reading" : "Read aloud")
+    let isAskOpen: Bool
+    let onToggleAsk: () -> Void
+    let isSettingsOpen: Bool
+    let onToggleSettings: () -> Void
 
-                Button { showThemeSettings.toggle() } label: {
-                    Text("AA")
-                        .font(.system(size: 14, weight: .medium))
-                        .readerTouchTarget()
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.textColor.opacity(0.7))
-                .accessibilityLabel("Reading appearance")
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onBack) {
+                Label("Library", systemImage: "chevron.left")
             }
+            .buttonStyle(ChromeButtonStyle(theme: theme))
+
+            Button(action: onToggleContents) {
+                Image(systemName: "list.bullet")
+            }
+            .buttonStyle(ChromeButtonStyle(theme: theme, isCircular: true, isOn: isContentsOpen))
+            .accessibilityLabel("Contents")
+
+            Spacer()
+
+            Button(action: onToggleListening) {
+                Image(systemName: isListening ? "mic.fill" : "mic")
+            }
+            .buttonStyle(ChromeButtonStyle(theme: theme, isCircular: true, isOn: isListening))
+            .accessibilityLabel(isListening ? "Stop voice commands" : "Voice commands")
+
+            Button(action: onToggleRead) {
+                Image(systemName: isReading ? "pause.fill" : "play.fill")
+            }
+            .buttonStyle(ChromeButtonStyle(theme: theme, isCircular: true, isOn: isReading))
+            .accessibilityLabel(isReading ? "Stop reading" : "Read aloud")
+
+            Button(action: onToggleAsk) {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+            }
+            .buttonStyle(ChromeButtonStyle(theme: theme, isCircular: true, isOn: isAskOpen))
+            .accessibilityLabel(isAskOpen ? "Close Ask" : "Ask Claude about this page")
+
+            Button(action: onToggleSettings) {
+                Image(systemName: "textformat.size")
+            }
+            .buttonStyle(ChromeButtonStyle(theme: theme, isCircular: true, isOn: isSettingsOpen))
+            .accessibilityLabel("Themes & Settings")
+        }
+        // Centred on the page, not between buttons of different widths — the same centre
+        // line as the spread's gutter below it.
+        .overlay {
+            Text(bookTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .foregroundStyle(theme.textColor.opacity(0.8))
+                .frame(maxWidth: 420)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        // The bar floats over the page now, so it needs just enough of the page colour
-        // behind it to stay legible over text — and a hairline to sit on.
-        .background(alignment: .bottom) {
-            ZStack(alignment: .bottom) {
-                theme.pageColor.opacity(0.9)
-                Rectangle()
-                    .fill(theme.textColor.opacity(0.08))
-                    .frame(height: 1)
-            }
-        }
+        .padding(.top, 14)
+        .padding(.bottom, 6)
     }
 }
 
-private extension View {
-    @ViewBuilder
-    func readerTouchTarget() -> some View {
-        #if os(iOS)
-        self.frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-        #else
-        self
-        #endif
+/// Reader chrome: quiet until the pointer is on it, then filled in the theme's ink, so
+/// the controls belong to the page rather than sitting on it as system buttons.
+private struct ChromeButtonStyle: ButtonStyle {
+    let theme: BookTheme
+    var isCircular = false
+    /// Its panel is open, or what it starts is under way.
+    var isOn = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        StyledLabel(configuration: configuration, theme: theme, isCircular: isCircular, isOn: isOn)
+    }
+
+    private struct StyledLabel: View {
+        let configuration: ButtonStyleConfiguration
+        let theme: BookTheme
+        let isCircular: Bool
+        let isOn: Bool
+        @State private var isHovered = false
+
+        private var isFilled: Bool { isHovered || isOn }
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isFilled ? theme.pageColor : theme.textColor.opacity(0.85))
+                .padding(.horizontal, isCircular ? 0 : 14)
+                #if os(iOS)
+                .frame(width: isCircular ? 44 : nil, height: 44)
+                #else
+                .frame(width: isCircular ? 32 : nil, height: 32)
+                #endif
+                .background {
+                    Capsule().fill(isFilled ? theme.textColor : theme.textColor.opacity(0.08))
+                }
+                .contentShape(Capsule())
+                .scaleEffect(configuration.isPressed ? 0.95 : 1)
+                .onHover { isHovered = $0 }
+                .animation(.easeOut(duration: 0.15), value: isFilled)
+        }
     }
 }
 
@@ -114,11 +121,15 @@ private extension View {
         bookTitle: "Le Comte de Monte-Cristo",
         theme: .calm,
         onBack: {},
-        onShowTOC: {},
+        isContentsOpen: false,
+        onToggleContents: {},
         isReading: false,
         onToggleRead: {},
         isListening: false,
         onToggleListening: {},
-        showThemeSettings: .constant(false)
+        isAskOpen: false,
+        onToggleAsk: {},
+        isSettingsOpen: false,
+        onToggleSettings: {}
     )
 }

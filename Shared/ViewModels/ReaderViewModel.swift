@@ -183,6 +183,24 @@ final class ReaderViewModel {
     private var pendingAutoReadAfterTranslation = false
     /// The texts behind the translation currently on screen, so we don't ask twice.
     private var lastTranslationRequest: [String] = []
+    /// What was last asked of the translator: this page's texts, then the pages either
+    /// side's, so a page turn finds its English already made.
+    private var lastTranslatorRequest: [String] = []
+    /// How many of `lastTranslatorRequest`'s texts are the page on screen's.
+    private var requestedPageCount = 0
+    /// Bumped whenever new translations are remembered, so pictures of pages taken
+    /// before them — the ones a page curl is made from — get taken again.
+    private(set) var translationsVersion = 0
+
+    /// Translating the page on screen, as opposed to the pages either side of it in the
+    /// background — only the first is worth covering the page for.
+    var isTranslatingPage: Bool {
+        #if os(tvOS)
+        false
+        #else
+        translationService.isTranslating && requestedPageCount > 0
+        #endif
+    }
     
     // MARK: - Chrome Visibility
 
@@ -469,6 +487,8 @@ final class ReaderViewModel {
         translationService.reset()
         #endif
         lastTranslationRequest = []
+        lastTranslatorRequest = []
+        requestedPageCount = 0
 
         if let laidOut = neighbors[index] {
             // Laid out ahead of time for a page turn into it: no need to do it again.
@@ -535,24 +555,22 @@ final class ReaderViewModel {
     }
 
     /// Book typesetting — indents, and no more space between paragraphs than between
-    /// lines — on Apple TV, wherever text is set as paragraphs: the book read as itself,
-    /// and both pages of side-by-side.
+    /// lines — wherever text is set as paragraphs: the book read as itself, and both pages
+    /// of side-by-side.
     private var usesBookParagraphs: Bool {
-        #if os(tvOS)
         layoutMode != .interleaved
-        #else
-        false
-        #endif
     }
 
     /// Paragraphs run on across page breaks, at a line. Only when the book is read as
     /// itself: side-by-side's translations are looked up a whole paragraph at a time, so
-    /// a paragraph there moves over whole to stay opposite its translation.
+    /// a paragraph there moves over whole to stay opposite its translation. Interleaved
+    /// runs on too on Apple TV, where every translation arrived with the book and can be
+    /// measured; elsewhere they're made a page at a time, a whole sentence per lookup.
     private var runsParagraphsAcrossPages: Bool {
         #if os(tvOS)
         layoutMode != .sideBySide
         #else
-        false
+        layoutMode == .original
         #endif
     }
 
@@ -1174,18 +1192,47 @@ final class ReaderViewModel {
         applyTranslations(saved.map { $0 ?? "" })
         #else
         let saved = textsToTranslate.map { memory.translation(of: $0) }
+        let ahead = textsAhead()
         if saved.allSatisfy({ $0 != nil }) {
             applyTranslations(saved.map { $0 ?? "" })
+            // Nothing to wait for here; make the next pages' English while they're read.
+            if !ahead.isEmpty { requestTranslation(page: [], ahead: ahead) }
             return
         }
 
-        translationService.requestTranslation(
-            texts: textsToTranslate,
-            from: nil,
-            to: .from("en")
-        )
+        // What's known now, and blanks for the rest — never the last page's English left
+        // standing under this page's sentences while the new translation is made.
+        translatedPage = Array(saved.map { $0 ?? "" }.dropFirst(currentPageIndex == 0 && !currentChapterTitle.isEmpty ? 1 : 0))
+        requestTranslation(page: textsToTranslate, ahead: ahead)
         #endif
     }
+
+    #if !os(tvOS)
+    /// Asks the translator for this page's texts and, in the same request, the pages
+    /// either side's — one session's work, and the next turn's English is ready for it.
+    private func requestTranslation(page: [String], ahead: [String]) {
+        let texts = page + ahead
+        guard texts != lastTranslatorRequest || !translationService.isTranslating else { return }
+        lastTranslatorRequest = texts
+        requestedPageCount = page.count
+        translationService.requestTranslation(texts: texts, from: nil, to: .from("en"))
+    }
+
+    /// The texts on the spreads either side of this one that have never been translated.
+    private func textsAhead() -> [String] {
+        guard layoutMode.showsTranslation else { return [] }
+        var texts: [String] = []
+        for forward in [true, false] {
+            guard let spread = spreadContent(turning: forward) else { continue }
+            if spread.isFirstPage && !spread.chapterTitle.isEmpty { texts.append(spread.chapterTitle) }
+            texts += spread.columns.flatMap { $0 }
+        }
+        var seen = Set<String>()
+        return texts.filter { text in
+            !text.isEmpty && memory.translation(of: text) == nil && seen.insert(text).inserted
+        }
+    }
+    #endif
 
     /// Puts a page's translations on screen. `results` lines up with the texts last
     /// requested: the chapter title first on a chapter's opening page, then the page.
@@ -1227,6 +1274,7 @@ final class ReaderViewModel {
     /// do nothing at all. Clearing the record first is what makes the button honest.
     func retryTranslation() {
         lastTranslationRequest = []
+        lastTranslatorRequest = []
         translationService.error = nil
         translateCurrentPage()
     }
@@ -1237,25 +1285,53 @@ final class ReaderViewModel {
         // writing page N's English under page N+1's French, or blanking a page that a
         // fresh request is about to fill.
         let delivered = translationService.results.map(\.original)
-        guard !delivered.isEmpty, delivered == lastTranslationRequest else { return }
+        guard !delivered.isEmpty, delivered == lastTranslatorRequest else { return }
 
         for result in translationService.results {
             memory.record(result.original, result.translated)
         }
         memoryHasUnsavedEntries = true
+        translationsVersion += 1
 
-        applyTranslations(translationService.translatedTexts)
+        // Only the page's own share goes on screen; the rest waits in memory for its turn.
+        guard requestedPageCount > 0 else { return }
+        let count = requestedPageCount
+        requestedPageCount = 0
+        applyTranslations(Array(translationService.translatedTexts.prefix(count)))
     }
     #endif
     
     // MARK: - Text-To-Speech
     
+    /// A page turn asked for by voice or by reading aloud, for the reader to play with
+    /// its page curl. Turns go straight through instead when no reader has asked for them
+    /// (`turnsByRequest`), as on Apple TV.
+    struct TurnRequest: Equatable {
+        let forward: Bool
+        let isAutoTurn: Bool
+        let id = UUID()
+    }
+
+    var turnRequest: TurnRequest?
+    /// Set by a reader that animates turns itself.
+    var turnsByRequest = false
+
+    private func requestTurn(forward: Bool, isAutoTurn: Bool = false) {
+        if turnsByRequest {
+            turnRequest = TurnRequest(forward: forward, isAutoTurn: isAutoTurn)
+        } else if forward {
+            goToNextPage(isAutoTurn: isAutoTurn)
+        } else {
+            goToPreviousPage()
+        }
+    }
+
     private func setupTTSCallback() {
         ttsService.onFinishReading = { [weak self] in
             guard let self = self else { return }
             if self.isAutoReading && self.canGoNext {
                 self.pendingAutoReadAfterTranslation = true
-                self.goToNextPage(isAutoTurn: true)
+                self.requestTurn(forward: true, isAutoTurn: true)
             } else {
                 self.isAutoReading = false
             }
@@ -1269,11 +1345,11 @@ final class ReaderViewModel {
             switch command {
             case .next:
                 if self.canGoNext {
-                    self.goToNextPage()
+                    self.requestTurn(forward: true)
                 }
             case .previous:
                 if self.canGoPrevious {
-                    self.goToPreviousPage()
+                    self.requestTurn(forward: false)
                 }
             }
         }

@@ -1,21 +1,20 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Theme options for the book reader.
 ///
 /// Preview colours are derived from the real page/text colours rather than hand-picked,
 /// so a swatch can never drift from the page it promises.
 ///
-/// The Mac offers the original five. Apple TV offers Books' six — Original, Quiet, Paper,
-/// Bold, Calm, Focus — each in a light and a dark version, the way Books pairs every
-/// theme with a dark appearance. `paper`, `calm`, `night` and `gray` serve both lists, so
-/// a book read on one keeps a sensible look on the other.
+/// Books' six — Original, Quiet, Paper, Bold, Calm, Focus — each in a light and a dark
+/// version, the way Books pairs every theme with a dark appearance, on every device.
+/// `sepia` is left from the Mac's first palette: books saved in it open as Calm.
 enum BookTheme: String, CaseIterable {
     case paper, calm, sepia, gray, night
     case original, quiet, bold, focus
     case paperDark, boldDark, calmDark, focusDark
-
-    /// What the Mac's theme popover offers.
-    static let macChoices: [BookTheme] = [.paper, .calm, .sepia, .gray, .night]
 
     /// Books' six, in Books' order, as they look on a light page.
     static let families: [BookTheme] = [.original, .quiet, .paper, .bold, .calm, .focus]
@@ -63,11 +62,14 @@ enum BookTheme: String, CaseIterable {
     // Text color when reading
     var textColor: Color { colors.text }
 
-    /// Page and ink. On Apple TV these are Books' own, sampled from Books itself — pages
-    /// and the theme tiles of its Themes & Settings panel, light and dark. The Mac keeps
-    /// the reader's original palette.
+    /// The translation's quieter ink: the text colour 60% of the way in from the page.
+    /// Solid, not see-through — a page curl's pictures of pages drew see-through text
+    /// twice over, so an English line went near-black for the length of a turn.
+    var translationColor: Color { colors.text.mix(with: colors.page, by: 0.4) }
+
+    /// Page and ink: Books' own, sampled from Books itself — pages and the theme tiles of
+    /// its Themes & Settings panel, light and dark.
     private var colors: (page: Color, text: Color) {
-        #if os(tvOS)
         switch self {
         case .original: return (Self.hex(0xFFFFFF), Self.hex(0x121212))
         case .night: return (Self.hex(0x000000), Self.hex(0xF4F4F4))
@@ -82,23 +84,6 @@ enum BookTheme: String, CaseIterable {
         case .focus: return (Self.hex(0xFFFCF5), Self.hex(0x0D0C08))
         case .focusDark: return (Self.hex(0x1E1D14), Self.hex(0xF7F5EC))
         }
-        #else
-        switch self {
-        case .paper: return (.white, Color(red: 0.1, green: 0.1, blue: 0.1))
-        case .calm: return (Color(red: 0.976, green: 0.949, blue: 0.898), Color(red: 0.25, green: 0.2, blue: 0.15))
-        case .sepia: return (Color(red: 0.94, green: 0.89, blue: 0.78), Color(red: 0.30, green: 0.22, blue: 0.12))
-        case .gray: return (Color(red: 0.165, green: 0.165, blue: 0.18), Color(red: 0.784, green: 0.784, blue: 0.8))
-        case .night: return (.black, Color(red: 0.88, green: 0.88, blue: 0.88))
-        case .original: return (.white, Color(red: 0.07, green: 0.07, blue: 0.07))
-        case .quiet: return (Color(red: 0.29, green: 0.29, blue: 0.30), Color(red: 0.80, green: 0.80, blue: 0.81))
-        case .bold: return (.white, .black)
-        case .focus: return (Color(red: 0.996, green: 0.973, blue: 0.898), Color(red: 0.12, green: 0.11, blue: 0.08))
-        case .paperDark: return (Color(red: 0.11, green: 0.11, blue: 0.118), Color(red: 0.80, green: 0.80, blue: 0.80))
-        case .boldDark: return (.black, .white)
-        case .calmDark: return (Color(red: 0.165, green: 0.141, blue: 0.11), Color(red: 0.85, green: 0.78, blue: 0.66))
-        case .focusDark: return (Color(red: 0.13, green: 0.12, blue: 0.09), Color(red: 0.91, green: 0.87, blue: 0.76))
-        }
-        #endif
     }
 
     private static func hex(_ value: UInt32) -> Color {
@@ -110,15 +95,14 @@ enum BookTheme: String, CaseIterable {
     }
 
     /// How a theme sets type until you customize it — Books' themes are a font and a
-    /// spacing as much as a colour. Where Books uses a font Apple TV doesn't have, the
+    /// spacing as much as a colour. Where Books uses a font this device doesn't have, the
     /// nearest one it does: Iowan Old Style for Calm's Canela, Avenir Next for Focus's
-    /// Proxima Nova, Georgia for Paper's Charter. The Mac's themes all start plain.
+    /// Proxima Nova, and on Apple TV, which has no Charter, Georgia for Paper's.
     var defaultStyle: ReadingStyle {
         var style = ReadingStyle()
-        #if os(tvOS)
         switch family {
         case .paper:
-            style.font = .georgia
+            style.font = ReaderFont.available.contains(.charter) ? .charter : .georgia
             style.justified = false
         case .bold:
             style.boldText = true
@@ -133,7 +117,6 @@ enum BookTheme: String, CaseIterable {
         default:
             break
         }
-        #endif
         return style
     }
 
@@ -306,4 +289,55 @@ struct ReadingStyle: Codable, Equatable {
     }
 
     private func clamped(_ step: Int) -> Int { min(max(step, 0), Self.steps - 1) }
+}
+
+/// Whether pages are light, dark, or follow the device's own appearance — for every
+/// book, as in Books.
+enum ReaderAppearance: String, CaseIterable {
+    case light, dark, automatic
+
+    static let key = "readerAppearance"
+
+    static var current: ReaderAppearance {
+        UserDefaults.standard.string(forKey: key).flatMap(ReaderAppearance.init) ?? .automatic
+    }
+
+    var name: String {
+        switch self {
+        case .light: return "Light"
+        case .dark: return "Dark"
+        case .automatic: return "Automatic"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        case .automatic: return "circle.lefthalf.filled"
+        }
+    }
+
+    /// The light or dark version of a theme this setting asks for.
+    @MainActor func theme(_ theme: BookTheme) -> BookTheme {
+        switch self {
+        case .light: return theme.appearance(dark: false)
+        case .dark: return theme.appearance(dark: true)
+        case .automatic: return theme.appearance(dark: Self.systemIsDark)
+        }
+    }
+
+    /// The device's own appearance. Not read from the view: the reader sets its window's
+    /// appearance to match the page, so the view only ever sees its own.
+    @MainActor static var systemIsDark: Bool {
+        #if os(macOS)
+        // The global setting itself — the app's appearance follows the page too.
+        return UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        #else
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen }
+            .first
+        return screen?.traitCollection.userInterfaceStyle == .dark
+        #endif
+    }
 }
