@@ -154,16 +154,65 @@ final class ReaderViewModel {
     #endif
     var ttsService = TTSService()
     var isAutoReading = false
-    /// Translations already made for this book — read before asking the translator, and
-    /// the only source of translations on Apple TV, which has no translator to ask.
-    private var memory = TranslationMemory()
-    private var memoryHasUnsavedEntries = false
+    /// Who translates this book: Apple, or Claude a page at a time. Each keeps its own
+    /// translations, so switching shows the other's straight away if it has the page.
+    var translator: Translator = .apple {
+        didSet {
+            guard oldValue != translator, isInitialLoadComplete else { return }
+            // The same texts may be on the page, but their translations aren't.
+            lastTranslationRequest = []
+            lastTranslatorRequest = []
+            claudeError = nil
+            claudePageTask?.cancel()
+            isClaudeTranslatingPage = false
+            handleLayoutModeChange()
+        }
+    }
+
+    /// Apple's translations of this book — read before asking the translator, and on
+    /// Apple TV, which has no translator to ask, everything the Mac sent with the book.
+    private var appleMemory = TranslationMemory()
+    /// Claude's, made as the book is read and kept with it, so a page is only paid for once.
+    private var claudeMemory = TranslationMemory()
+    private var unsavedMemories: Set<Translator> = []
+
+    /// The chosen translator's translations.
+    private var memory: TranslationMemory {
+        get { translator == .claude ? claudeMemory : appleMemory }
+        set {
+            if translator == .claude { claudeMemory = newValue } else { appleMemory = newValue }
+        }
+    }
+
+    /// Every translation the page will show is already known before it's laid out: on
+    /// Apple TV, reading what the Mac sent. Then interleaved pages are measured with the
+    /// real English and paragraphs run on across pages. Translations made as you read
+    /// (Apple's on a Mac, Claude's anywhere) arrive after the page is laid out.
+    private var translationsArriveWithBook: Bool {
+        #if os(tvOS)
+        translator == .apple
+        #else
+        false
+        #endif
+    }
+
+    /// The book's language, for telling Claude what it's translating from.
+    private var bookLanguage: String?
+    /// Texts Claude is translating right now, so a page isn't asked for twice.
+    private var claudePending: Set<String> = []
+    /// Waits out a quick run of page turns, so pages flicked past aren't paid for.
+    private var claudePageTask: Task<Void, Never>?
+    /// Claude is translating the page on screen.
+    private(set) var isClaudeTranslatingPage = false
+    /// Why Claude's last translation of this page failed.
+    private(set) var claudeError: String?
 
     var isTranslating: Bool {
+        if translator == .claude { return isClaudeTranslatingPage }
         #if os(tvOS)
-        false
+        return false
         #else
-        translationService.isTranslating
+        return translationService.isTranslating
         #endif
     }
 
@@ -177,9 +226,9 @@ final class ReaderViewModel {
         return key.isEmpty ? "" : memory.translation(of: key)
     }
 
-    /// Whether this book came with translations to show. On Apple TV, a book sent without
-    /// them (an English book, say) offers no translation settings at all.
-    var hasSavedTranslations: Bool { !memory.isEmpty }
+    /// Whether this book has Apple translations. On Apple TV, those are the ones the Mac
+    /// sent; a book sent without them can still be translated by Claude.
+    var hasAppleTranslations: Bool { !appleMemory.isEmpty }
     private var pendingAutoReadAfterTranslation = false
     /// The texts behind the translation currently on screen, so we don't ask twice.
     private var lastTranslationRequest: [String] = []
@@ -195,10 +244,11 @@ final class ReaderViewModel {
     /// Translating the page on screen, as opposed to the pages either side of it in the
     /// background — only the first is worth covering the page for.
     var isTranslatingPage: Bool {
+        if translator == .claude { return isClaudeTranslatingPage }
         #if os(tvOS)
-        false
+        return false
         #else
-        translationService.isTranslating && requestedPageCount > 0
+        return translationService.isTranslating && requestedPageCount > 0
         #endif
     }
     
@@ -434,8 +484,11 @@ final class ReaderViewModel {
             if book.language == nil, let language = content.language {
                 book.language = language
             }
-            memory = TranslationMemory(data: book.translationsData)
-            memoryHasUnsavedEntries = false
+            appleMemory = TranslationMemory(data: book.translationsData)
+            claudeMemory = TranslationMemory(data: book.claudeTranslationsData)
+            unsavedMemories = []
+            bookLanguage = book.language
+            translator = Translator(rawValue: book.translatorRaw) ?? .apple
             setupTTSCallback()
             #if !os(tvOS)
             setupSpeechCallback()
@@ -447,7 +500,8 @@ final class ReaderViewModel {
             themeStyles = ThemeStyles(data: book.savedStyleData)
             layoutMode = LayoutMode(rawValue: book.savedLayoutMode) ?? .sideBySide
             #if os(tvOS)
-            if memory.isEmpty { layoutMode = .original }
+            // Nothing from the Mac to show. Claude only translates once it's been chosen.
+            if translator == .apple && appleMemory.isEmpty { layoutMode = .original }
             #endif
             if !chapters.isEmpty {
                 // Books saved before offsets existed only have a page number to go on.
@@ -567,11 +621,7 @@ final class ReaderViewModel {
     /// runs on too on Apple TV, where every translation arrived with the book and can be
     /// measured; elsewhere they're made a page at a time, a whole sentence per lookup.
     private var runsParagraphsAcrossPages: Bool {
-        #if os(tvOS)
-        layoutMode != .sideBySide
-        #else
-        layoutMode == .original
-        #endif
+        translationsArriveWithBook ? layoutMode != .sideBySide : layoutMode == .original
     }
 
     /// The current page as `PageView` draws it, in columns, with each paragraph's setting.
@@ -737,23 +787,22 @@ final class ReaderViewModel {
         // budget instead of stopping a paragraph early or clipping a line late.
         func unitHeight(_ unit: TextUnit) -> CGFloat {
             if layoutMode == .interleaved {
-                #if os(tvOS)
-                // Every translation the TV will show arrived with the book, so measure the
-                // real one rather than reserving the French's length for the English.
-                let translation = savedTranslation(for: unit)
-                if translation == "" {
-                    // French only: the part of a sentence that ends a column.
-                    return ReaderTextMeasurer.height(
-                        of: unit.paragraph,
-                        size: fontSize,
-                        lineSpacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale,
-                        width: width,
-                        style: style
-                    )
+                var translation: String? = nil
+                if translationsArriveWithBook {
+                    // Every translation the TV will show arrived with the book, so measure
+                    // the real one rather than reserving the French's length for the English.
+                    translation = savedTranslation(for: unit)
+                    if translation == "" {
+                        // French only: the part of a sentence that ends a column.
+                        return ReaderTextMeasurer.height(
+                            of: unit.paragraph,
+                            size: fontSize,
+                            lineSpacing: ReaderLayout.bodyLineSpacing * style.lineSpacingScale,
+                            width: width,
+                            style: style
+                        )
+                    }
                 }
-                #else
-                let translation: String? = nil
-                #endif
                 return ReaderTextMeasurer.interleavedPairHeight(
                     text: unit.text,
                     translation: translation,
@@ -1159,6 +1208,8 @@ final class ReaderViewModel {
             translatedPage = []
             translatedChapterTitle = ""
             isMissingTranslations = false
+            claudePageTask?.cancel()
+            isClaudeTranslatingPage = false
             if pendingAutoReadAfterTranslation {
                 pendingAutoReadAfterTranslation = false
                 startPlayingCurrentPage()
@@ -1177,23 +1228,27 @@ final class ReaderViewModel {
         // work and a flash of the loading overlay.
         guard textsToTranslate != lastTranslationRequest else { return }
         lastTranslationRequest = textsToTranslate
+        claudeError = nil
 
         // Pages already translated — on this device, or by the Mac before sending the
         // book to the TV — show instantly, offline, without asking the translator again.
-        #if os(tvOS)
-        var keyed = currentPageIndex >= 0 && currentPageIndex < pages.count
-            ? pages[currentPageIndex].units.map { savedTranslation(for: $0) }
-            : []
-        if currentPageIndex == 0 && !currentChapterTitle.isEmpty {
-            keyed.insert(memory.translation(of: currentChapterTitle), at: 0)
+        if translationsArriveWithBook {
+            var keyed = currentPageIndex >= 0 && currentPageIndex < pages.count
+                ? pages[currentPageIndex].units.map { savedTranslation(for: $0) }
+                : []
+            if currentPageIndex == 0 && !currentChapterTitle.isEmpty {
+                keyed.insert(memory.translation(of: currentChapterTitle), at: 0)
+            }
+            isMissingTranslations = keyed.contains(nil)
+            applyTranslations(keyed.map { $0 ?? "" })
+            return
         }
-        let saved = keyed
-        isMissingTranslations = saved.contains(nil)
-        applyTranslations(saved.map { $0 ?? "" })
-        #else
+
+        isMissingTranslations = false
         let saved = textsToTranslate.map { memory.translation(of: $0) }
         let ahead = textsAhead()
         if saved.allSatisfy({ $0 != nil }) {
+            isClaudeTranslatingPage = false
             applyTranslations(saved.map { $0 ?? "" })
             // Nothing to wait for here; make the next pages' English while they're read.
             if !ahead.isEmpty { requestTranslation(page: [], ahead: ahead) }
@@ -1204,25 +1259,31 @@ final class ReaderViewModel {
         // standing under this page's sentences while the new translation is made.
         translatedPage = Array(saved.map { $0 ?? "" }.dropFirst(currentPageIndex == 0 && !currentChapterTitle.isEmpty ? 1 : 0))
         requestTranslation(page: textsToTranslate, ahead: ahead)
-        #endif
     }
 
-    #if !os(tvOS)
     /// Asks the translator for this page's texts and, in the same request, the pages
     /// either side's — one session's work, and the next turn's English is ready for it.
     private func requestTranslation(page: [String], ahead: [String]) {
+        if translator == .claude {
+            requestClaudeTranslation(page: page, ahead: ahead)
+            return
+        }
+        #if !os(tvOS)
         let texts = page + ahead
         guard texts != lastTranslatorRequest || !translationService.isTranslating else { return }
         lastTranslatorRequest = texts
         requestedPageCount = page.count
         translationService.requestTranslation(texts: texts, from: nil, to: .from("en"))
+        #endif
     }
 
     /// The texts on the spreads either side of this one that have never been translated.
+    /// For Claude, only the spread ahead: the one before was most likely just read, and
+    /// every page asked for is paid for.
     private func textsAhead() -> [String] {
         guard layoutMode.showsTranslation else { return [] }
         var texts: [String] = []
-        for forward in [true, false] {
+        for forward in translator == .claude ? [true] : [true, false] {
             guard let spread = spreadContent(turning: forward) else { continue }
             if spread.isFirstPage && !spread.chapterTitle.isEmpty { texts.append(spread.chapterTitle) }
             texts += spread.columns.flatMap { $0 }
@@ -1232,7 +1293,74 @@ final class ReaderViewModel {
             !text.isEmpty && memory.translation(of: text) == nil && seen.insert(text).inserted
         }
     }
-    #endif
+
+    /// Has Claude translate whatever on this page it hasn't already, then the spread
+    /// ahead in the background.
+    ///
+    /// Only the texts with no saved translation are sent, each once: everything Claude
+    /// returns is kept with the book, so coming back to a page costs nothing. The page's
+    /// own request waits a moment first, so pages flicked straight past aren't paid for.
+    private func requestClaudeTranslation(page: [String], ahead: [String]) {
+        func missing(_ texts: [String]) -> [String] {
+            var seen = Set<String>()
+            return texts.filter { text in
+                let key = TranslationMemory.key(text)
+                return !key.isEmpty && claudeMemory.translation(of: key) == nil
+                    && !claudePending.contains(key) && seen.insert(key).inserted
+            }
+        }
+
+        let pageTexts = missing(page)
+        claudePageTask?.cancel()
+        if !pageTexts.isEmpty {
+            isClaudeTranslatingPage = true
+            claudePageTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                // Its own task, so turning the page doesn't cancel a request already sent:
+                // it's paid for either way, and kept for when the page comes round again.
+                Task { [weak self] in await self?.translateWithClaude(pageTexts, isPage: true) }
+            }
+        } else {
+            // Already on its way, from a request for the spread ahead.
+            isClaudeTranslatingPage = page.contains { claudePending.contains(TranslationMemory.key($0)) }
+            let aheadTexts = missing(ahead)
+            if !aheadTexts.isEmpty {
+                Task { [weak self] in await self?.translateWithClaude(aheadTexts, isPage: false) }
+            }
+        }
+    }
+
+    private func translateWithClaude(_ texts: [String], isPage: Bool) async {
+        let keys = texts.map(TranslationMemory.key)
+        #if DEBUG
+        Self.debugLog("[claude] translating \(keys.count) texts (\(isPage ? "page" : "ahead")): \(keys.first?.prefix(40) ?? "")")
+        #endif
+        claudePending.formUnion(keys)
+        defer { claudePending.subtract(keys) }
+
+        do {
+            let translations = try await Claude.translate(keys, from: bookLanguage)
+            for (original, translated) in zip(keys, translations) {
+                claudeMemory.record(original, translated)
+            }
+            unsavedMemories.insert(.claude)
+            translationsVersion += 1
+        } catch {
+            // Only worth saying if it's this page that went untranslated.
+            let onPage = currentPageContent.contains { keys.contains(TranslationMemory.key($0)) }
+            guard isPage, onPage, translator == .claude else { return }
+            isClaudeTranslatingPage = false
+            claudeError = error.localizedDescription
+            return
+        }
+
+        // Show it — and ask for the spread ahead — if the page it was for is still up.
+        claudePending.subtract(keys)
+        guard translator == .claude, layoutMode.showsTranslation else { return }
+        lastTranslationRequest = []
+        translateCurrentPage()
+    }
 
     /// Puts a page's translations on screen. `results` lines up with the texts last
     /// requested: the chapter title first on a chapter's opening page, then the page.
@@ -1255,8 +1383,11 @@ final class ReaderViewModel {
     /// Apple's own message is usually terse ("The operation couldn't be completed"), and by
     /// far the most common cause is simply that the language pair hasn't been downloaded yet
     /// — which is fixable in System Settings, so say so.
-    #if !os(tvOS)
     var translationErrorMessage: String? {
+        if translator == .claude { return claudeError }
+        #if os(tvOS)
+        return nil
+        #else
         guard let error = translationService.error else { return nil }
 
         let lowered = error.lowercased()
@@ -1265,6 +1396,7 @@ final class ReaderViewModel {
 
         guard looksLikeMissingModel else { return error }
         return error + " Translation languages download in System Settings → General → Language & Region."
+        #endif
     }
 
     /// Ask for the current page again after a failure.
@@ -1275,22 +1407,26 @@ final class ReaderViewModel {
     func retryTranslation() {
         lastTranslationRequest = []
         lastTranslatorRequest = []
+        claudeError = nil
+        #if !os(tvOS)
         translationService.error = nil
+        #endif
         translateCurrentPage()
     }
 
+    #if !os(tvOS)
     func handleTranslationComplete() {
         // Only accept results for the request currently on screen. Fast page flips can
         // deliver a superseded session's completion after the reader has moved on —
         // writing page N's English under page N+1's French, or blanking a page that a
         // fresh request is about to fill.
         let delivered = translationService.results.map(\.original)
-        guard !delivered.isEmpty, delivered == lastTranslatorRequest else { return }
+        guard translator == .apple, !delivered.isEmpty, delivered == lastTranslatorRequest else { return }
 
         for result in translationService.results {
-            memory.record(result.original, result.translated)
+            appleMemory.record(result.original, result.translated)
         }
-        memoryHasUnsavedEntries = true
+        unsavedMemories.insert(.apple)
         translationsVersion += 1
 
         // Only the page's own share goes on screen; the rest waits in memory for its turn.
@@ -1497,12 +1633,16 @@ final class ReaderViewModel {
         book.savedFontSize = Double(fontSize)
         book.savedThemeName = currentTheme.rawValue
         book.savedLayoutMode = layoutMode.rawValue
+        book.translatorRaw = translator.rawValue
         book.savedStyleData = themeStyles.encoded()
         book.lastReadDate = Date()
-        if memoryHasUnsavedEntries {
-            book.translationsData = memory.encoded()
-            memoryHasUnsavedEntries = false
+        if unsavedMemories.contains(.apple) {
+            book.translationsData = appleMemory.encoded()
         }
+        if unsavedMemories.contains(.claude) {
+            book.claudeTranslationsData = claudeMemory.encoded()
+        }
+        unsavedMemories = []
         try? modelContext.save()
     }
 }

@@ -43,6 +43,14 @@ final class Book {
     /// Apple TV" — the TV can't translate, so it reads only what arrives here.
     @Attribute(.externalStorage) var translationsData: Data?
 
+    /// Claude's translations of this book, encoded `TranslationMemory`, made a page at a
+    /// time as it's read with Claude chosen as the translator. Kept apart from Apple's, so
+    /// switching back and forth shows each as it was and neither is ever paid for twice.
+    @Attribute(.externalStorage) var claudeTranslationsData: Data?
+
+    /// Who translates this book. Raw `Translator`.
+    var translatorRaw: String = Translator.apple.rawValue
+
     /// Where this book stands with the Apple TV. Raw `AppleTVStatus`; only the Mac sets it.
     var appleTVStatusRaw: String = AppleTVStatus.none.rawValue
 
@@ -160,4 +168,13 @@ enum LayoutMode: String, CaseIterable {
     case original = "Original"
 
     var showsTranslation: Bool { self != .original }
+}
+
+/// Where a book's translations come from.
+enum Translator: String, CaseIterable {
+    /// Apple's on-device translation: made live on a Mac or iPad, and on Apple TV, which
+    /// can't run it, whatever the Mac translated before sending the book.
+    case apple
+    /// Claude Haiku, a page at a time as it's read, each page kept once it's made.
+    case claude
 }

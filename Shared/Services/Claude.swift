@@ -46,6 +46,7 @@ enum Claude {
         case busy
         case declined
         case cutOff
+        case misaligned
         case http(Int, String?)
 
         var errorDescription: String? {
@@ -58,6 +59,8 @@ enum Claude {
                 return "Claude declined to answer that one."
             case .cutOff:
                 return "Claude ran out of room before finishing. Try asking a narrower question."
+            case .misaligned:
+                return "Claude's translation didn't line up with the page. Try again."
             case .http(let code, let message):
                 return message ?? "Claude returned an error (HTTP \(code))."
             }
@@ -155,6 +158,90 @@ enum Claude {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    // MARK: - Translating
+
+    /// A page's texts in English: one translation per text, in the same order.
+    ///
+    /// Not streamed: nothing goes on the page until every sentence has its English, and
+    /// the reply is JSON held to a schema, so each translation lines up with its text.
+    /// Low effort, because a page of a novel needs a careful translator, not a long think —
+    /// and at Haiku's prices a page costs about a tenth of a cent.
+    static func translate(_ texts: [String], from language: String?) async throws -> [String] {
+        guard !texts.isEmpty else { return [] }
+        let source = language.flatMap { Locale(identifier: "en").localizedString(forLanguageCode: $0) }
+            ?? "the book's own language"
+
+        let system = """
+        You translate a book from \(source) into English, a page at a time, for someone \
+        reading the original alongside your translation to learn the language.
+
+        You're given a JSON array of passages from the page, in reading order: sentences, \
+        paragraphs, or a chapter heading. Return exactly one English translation per \
+        passage, in the same order — never merge, split, skip or reorder them, even when a \
+        passage is a fragment that only makes sense with its neighbours.
+
+        Translate faithfully and keep the author's register, but write natural English \
+        rather than a word-for-word gloss. Keep names as written. Don't add notes, \
+        explanations, or quotation marks that aren't in the original; leave out a leading \
+        dialogue dash.
+        """
+        let passages = String(decoding: try JSONEncoder().encode(texts), as: UTF8.self)
+        let body: [String: Any] = [
+            "model": model,
+            // Room for the thinking as well as the page: a short cap is what cut answers off.
+            "max_tokens": 16000,
+            "system": system,
+            "messages": [["role": "user", "content": passages]],
+            "output_config": [
+                "effort": "low",
+                "format": [
+                    "type": "json_schema",
+                    "schema": [
+                        "type": "object",
+                        "properties": [
+                            "translations": ["type": "array", "items": ["type": "string"]]
+                        ],
+                        "required": ["translations"],
+                        "additionalProperties": false
+                    ] as [String: Any]
+                ] as [String: Any]
+            ] as [String: Any]
+        ]
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue(Secrets.claudeAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(apiVersion, forHTTPHeaderField: "anthropic-version")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw failure(status: http.statusCode, body: String(decoding: data, as: UTF8.self))
+        }
+
+        struct Reply: Decodable {
+            struct Block: Decodable {
+                let type: String
+                let text: String?
+            }
+            let content: [Block]
+            let stop_reason: String?
+        }
+        struct Translations: Decodable { let translations: [String] }
+
+        let reply = try JSONDecoder().decode(Reply.self, from: data)
+        if reply.stop_reason == "refusal" { throw Failure.declined }
+        if reply.stop_reason == "max_tokens" { throw Failure.cutOff }
+        // A reply can open with thinking blocks; the answer is the text.
+        guard let text = reply.content.first(where: { $0.type == "text" })?.text,
+              let parsed = try? JSONDecoder().decode(Translations.self, from: Data(text.utf8)),
+              parsed.translations.count == texts.count
+        else { throw Failure.misaligned }
+        return parsed.translations
     }
 
     /// The parts of a server-sent event this reads. Thinking and the search's own query

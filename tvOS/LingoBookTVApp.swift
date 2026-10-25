@@ -66,6 +66,8 @@ enum TVDebugLaunch {
     }
     /// A `LayoutMode` raw value to read in ("Interleaved", "Side by Side", "Original").
     static var layout: String? { defaults.string(forKey: "LBLayout") }
+    /// A `Translator` raw value to translate with ("apple", "claude").
+    static var translator: String? { defaults.string(forKey: "LBTranslator") }
     /// A `BookTheme` raw value to read in.
     static var theme: String? { defaults.string(forKey: "LBTheme") }
     /// Scrolls the settings panel to its foot.

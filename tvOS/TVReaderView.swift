@@ -5,11 +5,11 @@ import SwiftData
 ///
 /// Reading, there is nothing on screen but the spread and two quiet running heads. Left
 /// and right turn pages. Clicking brings up Books' chrome: a bar along the top (Library,
-/// Contents, the title, Aa) and the page number below. Back peels those away one layer
-/// at a time, then returns to the library.
+/// Contents and Aa on the left, the title, Ask on its own at the right) and the page
+/// number below. Back peels those away one layer at a time, then returns to the library.
 ///
-/// Translations come only from what the Mac sent; nothing here can make new ones. A book
-/// that arrived without any reads as itself, and offers no translation settings.
+/// Translations come from what the Mac sent — Apple's translator can't run here — or, if
+/// it's chosen, from Claude, a page at a time as it's read, each page kept with the book.
 struct TVReaderView: View {
     let book: Book
 
@@ -108,7 +108,7 @@ struct TVReaderView: View {
                 }
                 if chrome == .appearance {
                     appearancePanel
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 if chrome == .contents {
                     contentsPanel
@@ -142,6 +142,9 @@ struct TVReaderView: View {
             if let size = TVDebugLaunch.fontSize {
                 viewModel.fontSize = size
                 try? await Task.sleep(for: .milliseconds(800))
+            }
+            if let raw = TVDebugLaunch.translator, let translator = Translator(rawValue: raw) {
+                viewModel.translator = translator
             }
             if let raw = TVDebugLaunch.layout, let mode = LayoutMode(rawValue: raw) {
                 viewModel.layoutMode = mode
@@ -204,6 +207,13 @@ struct TVReaderView: View {
         .onChange(of: viewModel.layoutMode) { _, _ in
             viewModel.saveProgress(book: book, modelContext: modelContext)
         }
+        .onChange(of: viewModel.translator) { _, _ in
+            viewModel.saveProgress(book: book, modelContext: modelContext)
+        }
+        // Each page Claude translates is written down at once, so it's never paid for twice.
+        .onChange(of: viewModel.translationsVersion) { _, _ in
+            viewModel.saveProgress(book: book, modelContext: modelContext)
+        }
         .onChange(of: appearanceRaw) { _, _ in applyAppearance() }
         // Automatic follows the Apple TV, which can switch at sunset with the book open.
         .task(id: appearanceRaw) {
@@ -250,7 +260,7 @@ struct TVReaderView: View {
             }
         }
         .onChange(of: spreadToken) { _, _ in curlsNextSpread = false }
-        .task(id: "\(spreadToken)|\(theme.rawValue)|\(viewModel.renderStyle.cacheKey)|\(viewModel.renderStyle.margins)|\(chrome == .hidden)") {
+        .task(id: "\(spreadToken)|\(theme.rawValue)|\(viewModel.renderStyle.cacheKey)|\(viewModel.renderStyle.margins)|\(viewModel.translationsVersion)|\(chrome == .hidden)") {
             guard chrome == .hidden else { return }
             await preparePageImages()
         }
@@ -388,7 +398,9 @@ struct TVReaderView: View {
     }
 
     private func pageImage(_ side: Side, of spread: ReaderViewModel.SpreadContent) -> CGImage? {
-        let key = "\(spreadToken)|\(theme.rawValue)|\(viewModel.renderStyle.cacheKey)|\(viewModel.renderStyle.margins)|\(spread.chapterTitle)|\(spread.pageIndex)|\(side)"
+        // With the translations' version: a picture taken before Claude's English came
+        // back would turn over a page with none.
+        let key = "\(spreadToken)|\(theme.rawValue)|\(viewModel.renderStyle.cacheKey)|\(viewModel.renderStyle.margins)|\(viewModel.translationsVersion)|\(spread.chapterTitle)|\(spread.pageIndex)|\(side)"
         if let cached = pageImages[key] { return cached }
         guard bookSize.width > 0,
               let screen = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.screen }).first
@@ -530,7 +542,7 @@ struct TVReaderView: View {
             fontSize: viewModel.fontSize,
             theme: theme,
             style: viewModel.renderStyle,
-            isTranslating: false,
+            isTranslating: viewModel.isTranslatingPage,
             onTranslate: { _ in },
             onCopy: { _ in }
         )
@@ -544,8 +556,15 @@ struct TVReaderView: View {
         VStack(spacing: 0) {
             Spacer()
             HStack(spacing: 28) {
-                if viewModel.layoutMode.showsTranslation && viewModel.isMissingTranslations {
-                    Label("Part of this page wasn't translated", systemImage: "exclamationmark.triangle")
+                if viewModel.layoutMode.showsTranslation {
+                    if let message = viewModel.translationErrorMessage {
+                        Label(message, systemImage: "exclamationmark.triangle")
+                            .lineLimit(1)
+                    } else if viewModel.isTranslatingPage {
+                        Label("Translating with Claude…", systemImage: "sparkles")
+                    } else if viewModel.isMissingTranslations {
+                        Label("Part of this page wasn't translated", systemImage: "exclamationmark.triangle")
+                    }
                 }
                 Spacer()
                 pagesLeft(viewModel.pagesLeftInChapter)
@@ -567,11 +586,11 @@ struct TVReaderView: View {
 
     // MARK: - Controls
 
-    /// One click: the bar along the top — Library, Contents, Aa — with Aa highlighted,
-    /// one more click from the fonts and themes.
+    /// One click: the bar along the top — Library, Contents, Aa, and Ask — with Ask
+    /// highlighted, so a second click is a question about the page. Aa is a swipe left.
     private func showControls() {
         chrome = .controls
-        Task { focus = .appearance }
+        Task { focus = .ask }
     }
 
     private func showAppearance() {
@@ -623,12 +642,13 @@ struct TVReaderView: View {
             chromeButton("Contents", systemImage: "list.bullet", iconOnly: true, focus: .contents) {
                 chrome = .contents
             }
-            Spacer()
-            chromeButton("Ask", systemImage: "bubble.left.and.text.bubble.right", iconOnly: true, focus: .ask) {
-                chrome = .ask
-            }
             chromeButton("Appearance", systemImage: "textformat.size", iconOnly: true, focus: .appearance) {
                 showAppearance()
+            }
+            Spacer()
+            // On its own at the right, across from the settings, where the bar opens.
+            chromeButton("Ask", systemImage: "bubble.left.and.text.bubble.right", iconOnly: true, focus: .ask) {
+                chrome = .ask
             }
         }
         // Centred on the screen, not between buttons of different widths — the same
@@ -667,11 +687,11 @@ struct TVReaderView: View {
     // MARK: - Themes & Settings
 
     /// Books' Themes & Settings: size, light or dark, the six themes, then Customize —
-    /// font, bold, spacing, margins, justification. The spread stays in view to the left,
-    /// so every change shows on the page as you make it.
+    /// font, bold, spacing, margins, justification. Down the left under Aa, with the settings,
+    /// leaving the right to Ask; the spread stays in view beside it, so every change shows
+    /// on the page as you make it.
     private var appearancePanel: some View {
         HStack {
-            Spacer()
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 40) {
@@ -681,7 +701,7 @@ struct TVReaderView: View {
                     appearanceRow
                     themeGrid
                     customize
-                    if viewModel.hasSavedTranslations {
+                    if book.needsTranslation || viewModel.hasAppleTranslations {
                         translationRows
                     }
                     Color.clear.frame(height: 1).id("panelEnd")
@@ -699,6 +719,7 @@ struct TVReaderView: View {
             .frame(width: 760)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 44, style: .continuous))
             .focusSection()
+            Spacer()
         }
         .padding(.horizontal, ReaderLayout.horizontalPadding)
         // Below the top bar, so Library and Contents stay in view and in reach.
@@ -890,17 +911,53 @@ struct TVReaderView: View {
             translationOption("Off", mode: .original)
             translationOption("Under Each Sentence", mode: .interleaved)
             translationOption("Side by Side", mode: .sideBySide)
+
+            sectionHeader("Translated By")
+            translatorOption(
+                "Apple Translate",
+                detail: viewModel.hasAppleTranslations ? "Sent from your Mac" : "Not sent from your Mac",
+                translator: .apple
+            )
+            .disabled(!viewModel.hasAppleTranslations)
+            translatorOption("Claude Haiku", detail: "Each page translated once, then kept", translator: .claude)
         }
     }
 
     private func translationOption(_ title: String, mode: LayoutMode) -> some View {
         Button {
+            // Nothing came from the Mac, so a translation has to be Claude's.
+            if mode.showsTranslation && !viewModel.hasAppleTranslations {
+                viewModel.translator = .claude
+            }
             viewModel.layoutMode = mode
         } label: {
             HStack {
                 Text(title)
                 Spacer()
                 if viewModel.layoutMode == mode {
+                    Image(systemName: "checkmark")
+                }
+            }
+        }
+        .buttonStyle(PanelButtonStyle(theme: theme, alignment: .leading))
+    }
+
+    /// Choosing who translates with translation off turns it on: that's what it's for.
+    private func translatorOption(_ title: String, detail: String, translator: Translator) -> some View {
+        Button {
+            if !viewModel.layoutMode.showsTranslation { viewModel.layoutMode = .interleaved }
+            viewModel.translator = translator
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                    Text(detail)
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 10)
+                Spacer()
+                if viewModel.translator == translator && viewModel.layoutMode.showsTranslation {
                     Image(systemName: "checkmark")
                 }
             }
