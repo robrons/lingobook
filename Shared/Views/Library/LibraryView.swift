@@ -222,7 +222,7 @@ struct LibraryView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityHint("Opens the book")
-                                .contextMenu { deleteButton(for: book) }
+                                .contextMenu { bookMenu(for: book) }
                             }
                             Spacer(minLength: 0)
                         }
@@ -256,15 +256,20 @@ struct LibraryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opens the book")
-                .contextMenu {
-                    #if os(macOS)
-                    sendToAppleTVButton(for: book)
-                    Divider()
-                    #endif
-                    deleteButton(for: book)
-                }
+                .contextMenu { bookMenu(for: book) }
             }
         }
+    }
+
+    /// The same menu on every cover, Continue Reading included — a book you've started
+    /// is exactly the one you'd want to send to the TV.
+    @ViewBuilder
+    private func bookMenu(for book: Book) -> some View {
+        #if os(macOS)
+        sendToAppleTVButton(for: book)
+        Divider()
+        #endif
+        deleteButton(for: book)
     }
 
     #if os(macOS)

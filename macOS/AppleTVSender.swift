@@ -54,12 +54,21 @@ final class AppleTVSender {
     }
 
     private func update(_ endpoints: [NWEndpoint]) {
-        self.endpoints = endpoints
-        appleTVNames = endpoints.compactMap {
-            if case let .service(name, _, _, _) = $0 { return name }
-            return nil
-        }
+        // The tvOS Simulator advertises too, under this Mac's own name, and saves and
+        // acknowledges a book just like a TV — so a book could land there and be marked
+        // "On Apple TV". Use it only when no real Apple TV is around.
+        let appleTVs = endpoints.filter { Self.serviceName(of: $0) != Self.thisMacName }
+        self.endpoints = appleTVs.isEmpty ? endpoints : appleTVs
+        appleTVNames = self.endpoints.compactMap(Self.serviceName)
         sendWaitingBooks()
+    }
+
+    /// What the tvOS Simulator calls itself on Bonjour, since it borrows the Mac's name.
+    private static let thisMacName = Host.current().localizedName
+
+    private static func serviceName(of endpoint: NWEndpoint) -> String? {
+        if case let .service(name, _, _, _) = endpoint { return name }
+        return nil
     }
 
     func sendWaitingBooks() {
