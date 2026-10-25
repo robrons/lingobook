@@ -4,9 +4,10 @@ import NaturalLanguage
 /// What Claude is shown of the book with a question.
 ///
 /// No summaries and no preparation: the chapter's own text up to the page on screen, the
-/// titles of the chapters already reached, and where the reader is. A model asked about
-/// a page it can read doesn't have to remember the book — which is where a small model
-/// goes wrong — and nothing past the current page is ever sent, so it can't spoil it.
+/// book's contents with each chapter's length, and where the reader is. A model asked
+/// about a page it can read doesn't have to remember the book — which is where a small
+/// model goes wrong. No text past the current page is sent; what's to come is only in
+/// the contents, for questions about the book's shape.
 struct PageContext: Equatable {
     var bookTitle: String
     var bookAuthor: String
@@ -15,9 +16,9 @@ struct PageContext: Equatable {
     var chapterIndex: Int
     var chapterCount: Int
     var chapterTitle: String
-    /// The table of contents up to and including the current chapter, parts and books
-    /// included, the current chapter marked ▸. Nothing later: a title like "The Death
-    /// of…" is a spoiler.
+    /// The whole table of contents, parts and books included, the current chapter marked ▸
+    /// and every chapter with its length — so "how long until the story picks up again?"
+    /// has an answer.
     var outline: String
     var pageInChapter: Int
     var pagesInChapter: Int
@@ -51,7 +52,7 @@ extension ReaderViewModel {
             chapterIndex: chapter,
             chapterCount: chapters.count,
             chapterTitle: current,
-            outline: outline(upTo: chapter, current: current),
+            outline: outline(marking: chapter),
             pageInChapter: currentPageIndex + 1,
             pagesInChapter: pages.count,
             bookPercent: Int((bookProgress * 100).rounded()),
@@ -62,25 +63,60 @@ extension ReaderViewModel {
 }
 
 extension ReaderViewModel {
-    /// The contents up to the reader's chapter.
+    /// The book's contents, the reader's chapter marked, each chapter with its length.
     ///
     /// From the book's own table of contents where it has one, because that carries the
     /// parts and books a chapter sits in. Given only "Chapitre 1 HISTOIRE D'UN PROGRÈS…",
     /// Haiku guessed which book of Les Misérables it was in, and guessed wrong.
-    fileprivate func outline(upTo chapter: Int, current: String) -> String {
-        let href = chapters.indices.contains(chapter) ? chapters[chapter].href : ""
-        if !href.isEmpty, let end = tableOfContents.firstIndex(where: { href.contains($0.href) || $0.href.contains(href) }) {
+    ///
+    /// All of it, not just the chapters read: given only those, "how long is this battle
+    /// going to go on?" was unanswerable, and that's a question about the book's shape, not
+    /// its plot. Lengths are in words, which turn into minutes.
+    fileprivate func outline(marking chapter: Int) -> String {
+        let words = ChapterLengths.words(in: chapters)
+        func length(_ index: Int?) -> String {
+            guard let index, words.indices.contains(index), words[index] >= 50 else { return "" }
+            return " — \(words[index].formatted()) words"
+        }
+        func chapterIndex(of item: EPUBService.TOCItem) -> Int? {
+            chapters.firstIndex { $0.href.contains(item.href) || item.href.contains($0.href) }
+        }
+        if chapters.indices.contains(chapter), tableOfContents.contains(where: { chapterIndex(of: $0) == chapter }) {
             let minimum = tableOfContents.map(\.level).min() ?? 0
-            return tableOfContents[...end].enumerated().map { index, item in
+            var marked = false
+            return tableOfContents.map { item in
+                let index = chapterIndex(of: item)
+                let isCurrent = !marked && index == chapter
+                if isCurrent { marked = true }
                 let indent = String(repeating: "  ", count: max(0, item.level - minimum))
-                return (index == end ? "▸ " : "  ") + indent + item.label
+                return (isCurrent ? "▸ " : "  ") + indent + item.label + length(index)
             }.joined(separator: "\n")
         }
         // No usable contents: the chapters' own titles, in reading order.
-        return (0...max(0, min(chapter, chapters.count - 1))).map { index in
+        return chapters.indices.map { index in
             let title = chapterTitle(at: index)
-            return (index == chapter ? "▸ " : "  ") + (title.isEmpty ? "Chapter \(index + 1)" : title)
+            return (index == chapter ? "▸ " : "  ") + (title.isEmpty ? "Chapter \(index + 1)" : title) + length(index)
         }.joined(separator: "\n")
+    }
+}
+
+/// Words in each chapter of a book, counted once and kept: the first question about a
+/// book pays for reading through its whole text, the rest don't.
+@MainActor
+private enum ChapterLengths {
+    private static var cache: [String: [Int]] = [:]
+
+    static func words(in chapters: [EPUBService.Chapter]) -> [Int] {
+        let key = "\(chapters.first?.id ?? "")|\(chapters.count)|\(chapters.last?.id ?? "")"
+        if let known = cache[key] { return known }
+        let counts = chapters.map { chapter in
+            chapter.htmlContent
+                .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+                .split(whereSeparator: \.isWhitespace)
+                .count
+        }
+        cache[key] = counts
+        return counts
     }
 }
 
@@ -187,6 +223,11 @@ final class AskConversation {
                             entries[index].sources.append(source)
                         }
                     }
+                }
+                // A reply can end with nothing said — all thinking, or only searching.
+                // Say so, rather than leave an empty answer on screen.
+                guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw Claude.Failure.http(0, "No answer came back. Try asking again.")
                 }
                 // Only a finished exchange joins the history, and only then does the text
                 // it carried count as shown: a failed question is resent whole next time.
@@ -343,7 +384,6 @@ final class AskConversation {
     /// lesson nobody asked for. The length limit is a number, because "keep it short"
     /// produces essays, and the answer is read from across a room or in a narrow panel.
     static func systemPrompt(for context: PageContext) -> String {
-        let remaining = context.chapterCount - context.chapterIndex - 1
         #if os(tvOS)
         let device = "television"
         let readingDistance = "from across the room"
@@ -361,8 +401,11 @@ final class AskConversation {
         this chapter up to the page on their screen. A page can start or end mid-sentence; \
         that is only where the page breaks, so don't mention it.
 
-        The contents up to here, ▸ marking the current chapter\(remaining > 0 ? " (\(remaining) more chapters follow)" : ""). \
-        Use it to say where something is in the book:
+        The book's contents, ▸ marking the chapter they are reading, with each chapter's \
+        length in words. Use it to say where things are and how long they run: how many \
+        chapters, words or minutes until a section ends or the story moves on is a fair \
+        question, not a spoiler. A reader takes about a minute per 200 words. For where \
+        things are in this book, trust these contents over anything you remember or find.
         \(context.outline)
 
         Answer what they ask about what they are reading. For this chapter, rely on the text \
@@ -372,12 +415,15 @@ final class AskConversation {
         of — no general caveats about memory, and don't go back to correct earlier answers \
         unless something in them was wrong.
 
-        Don't give away what happens after this chapter, unless they plainly ask you to \
-        spoil it. Then tell them.
+        Be helpful about what lies ahead without spoiling it. Saying what a coming chapter or \
+        section is about in general — "the next book returns to Valjean", "eight more \
+        chapters of battle" — is fine. Don't give away plot turns after this chapter, such \
+        as deaths, hidden identities or how things end, unless they ask you to spoil it; \
+        then tell them.
 
-        Some questions come with a web search. Use it only for the real world outside the \
-        book — history, the author, real people's lives beyond the novel — never for what is \
-        in the text you were given or for the story itself. When you use what you found, say \
+        Some questions come with a web search. Search whenever they ask you to, and for \
+        anything about the real world outside the book — history, the author, real people — \
+        or that you aren't sure of. When you use what you found, say \
         each fact once: no opening summary that the sentences after it then repeat. An \
         earlier answer of yours that ends in [Found by web search: …] came from a search you \
         ran; stand by it as you would by the book, and never write that note yourself.

@@ -45,6 +45,7 @@ enum Claude {
         case rejectedKey
         case busy
         case declined
+        case cutOff
         case http(Int, String?)
 
         var errorDescription: String? {
@@ -55,6 +56,8 @@ enum Claude {
                 return "Claude is busy right now. Try again in a moment."
             case .declined:
                 return "Claude declined to answer that one."
+            case .cutOff:
+                return "Claude ran out of room before finishing. Try asking a narrower question."
             case .http(let code, let message):
                 return message ?? "Claude returned an error (HTTP \(code))."
             }
@@ -94,7 +97,9 @@ enum Claude {
         system: String,
         messages: [Message],
         webSearch: Bool = false,
-        maxTokens: Int = 1500
+        // Room for thinking as well as the answer: at medium effort, with a whole book's
+        // contents to read, 1,500 went on thinking and the answer came back empty.
+        maxTokens: Int = 4000
     ) -> AsyncThrowingStream<Chunk, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -136,6 +141,7 @@ enum Claude {
                             }
                         case "message_delta":
                             if event.delta?.stop_reason == "refusal" { throw Failure.declined }
+                            if event.delta?.stop_reason == "max_tokens" { throw Failure.cutOff }
                         case "error":
                             throw Failure.http(0, event.error?.message)
                         default:
